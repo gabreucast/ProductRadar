@@ -71,13 +71,13 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
 
   if (tl.status === TRAFFIC_LIGHT_STATUS.GREEN) {
     tlColor = '#059669';
-    tlText = 'Baixa Concorrência / Alta Oportunidade';
+    tlText = 'Baixo Volume de Resultados';
   } else if (tl.status === TRAFFIC_LIGHT_STATUS.YELLOW) {
     tlColor = '#d97706';
-    tlText = 'Concorrência Moderada / Atenção';
+    tlText = 'Volume Moderado de Resultados';
   } else if (tl.status === TRAFFIC_LIGHT_STATUS.RED) {
     tlColor = '#dc2626';
-    tlText = 'Alta Concorrência';
+    tlText = 'Alto Volume de Resultados';
   }
 
   if (searchVis.trafficLight) {
