@@ -1238,7 +1238,22 @@ export function observeDynamicContent(
     }
     if (context === PAGE_CONTEXTS.PRODUCT_DETAIL) {
       const p = extractProductPageData(documentRoot);
-      return Boolean(p && p.title && p.price && p.price.current !== null);
+      const hasBasicInfo = Boolean(p && p.title && p.price && p.price.current !== null);
+      if (!hasBasicInfo) return false;
+
+      // TASK-035: Título e preço isolados não são mais suficientes para encerrar a observação.
+      // O observador deve aguardar a avaliação dos dados estruturados/hidratados (estoque, data de criação, vendedor)
+      // ou até o encerramento por timeout máximo limitado (TASK-024).
+      const hasStructuredOrHydratedData = Boolean(
+        p.availableStock !== null &&
+        (
+          p.creationDate !== null ||
+          p.soldQuantity !== null ||
+          (p.seller && (p.seller.name !== null || p.seller.reputation !== null || p.seller.powerSellerStatus !== null))
+        )
+      );
+
+      return hasStructuredOrHydratedData;
     }
     return true;
   };
