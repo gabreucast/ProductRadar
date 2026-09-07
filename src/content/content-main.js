@@ -9,6 +9,7 @@ import {
   calculateTrafficLight,
   extractSearchResultCount,
   calculateEstimatedTax,
+  calculateSalesPerDay,
 } from '../shared/utils.js';
 import { extractSearchPageData } from './extractors/search-extractor.js';
 import { extractProductPageData } from './extractors/product-extractor.js';
@@ -373,6 +374,40 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Vendas declaradas:</span>
         <div>${salesText}</div>
+      </div>
+    `);
+
+    // Vendas por dia (Estimativa de Velocidade / TASK-028)
+    const effectiveSold = (productData && typeof productData.soldQuantity === 'number')
+      ? productData.soldQuantity
+      : (searchContext && typeof searchContext.soldQuantity === 'number' ? searchContext.soldQuantity : null);
+    const creationDate = productData && productData.creationDate ? productData.creationDate : null;
+    const spdCalc = calculateSalesPerDay(effectiveSold, creationDate);
+
+    let spdContent = '';
+    if (spdCalc.value !== null) {
+      spdContent = `
+        <div style="text-align: right;">
+          <strong style="color: #111827;">${spdCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / dia</strong>
+          <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>
+        </div>
+      `;
+    } else {
+      spdContent = `
+        <div style="text-align: right;">
+          <span style="color: #9ca3af; font-style: italic;">Indisponível (sem data de criação)</span>
+          <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>
+        </div>
+      `;
+    }
+
+    indicatorRows.push(`
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+        <span style="color: #4b5563;">Vendas por dia:</span>
+        <div>${spdContent}</div>
+      </div>
+      <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
+        ℹ️ <em>Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.</em>
       </div>
     `);
   }

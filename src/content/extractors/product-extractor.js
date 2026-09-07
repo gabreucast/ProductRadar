@@ -129,6 +129,56 @@ function resolveProductUrl(root) {
 }
 
 /**
+ * Converte texto contendo data de criação ou idade do anúncio (ex: "Anúncio criado em 14/05/2025", "Criado Há 480 dias")
+ * em uma string ISO de data válida (TASK-028).
+ *
+ * @param {string|null|undefined} text - Texto bruto observado.
+ * @param {Date} [now=new Date()] - Data de referência para cálculos relativos.
+ * @returns {string|null} String de data ISO ou null se ausente/inválido.
+ */
+export function parseCreationDateText(text, now = new Date()) {
+  if (!text || typeof text !== 'string') return null;
+
+  const clean = text.trim();
+
+  // 1. Padrão de data brasileira: "Anúncio criado em DD/MM/YYYY" ou "Criado em DD/MM/YYYY"
+  const dateMatch = clean.match(/(?:an[úu]ncio\s+)?criado\s+em\s+(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})/i);
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1], 10);
+    const month = parseInt(dateMatch[2], 10) - 1;
+    let year = parseInt(dateMatch[3], 10);
+    if (year < 100) {
+      year += 2000;
+    }
+    const d = new Date(year, month, day);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  // 2. Padrão de dias decorridos: "Criado há X dias" ou "Criado Há X dias"
+  const daysMatch = clean.match(/criado\s+h[áa]\s+(\d+)\s+dias?/i);
+  if (daysMatch) {
+    const days = parseInt(daysMatch[1], 10);
+    if (!isNaN(days) && days >= 0) {
+      const d = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      return d.toISOString();
+    }
+  }
+
+  // 3. Padrão ISO ou data padrão (ex: "2025-05-14" ou "2025-05-14T10:00:00Z")
+  const isoMatch = clean.match(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?$/);
+  if (isoMatch) {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+
+  return null;
+}
+
+/**
  * Função pura que extrai e normaliza os dados de uma página de detalhe de produto (PDP).
  * Não realiza mutações no DOM, não chama APIs de rede ou storage, e não executa cálculos de negócio.
  * 
@@ -293,6 +343,34 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
+  // 8. Data de Criação do Anúncio (TASK-028)
+  // Observa atributos explícitos, metadados ou subtítulos caso legitimamente expostos pelo DOM
+  let creationDate = null;
+  if (typeof documentRoot.getAttribute === 'function' && documentRoot.getAttribute('data-creation-date')) {
+    creationDate = parseCreationDateText(documentRoot.getAttribute('data-creation-date'));
+  }
+
+  if (!creationDate && typeof documentRoot.querySelector === 'function') {
+    // 8.1 Meta tags de criação
+    const metaEl = documentRoot.querySelector('meta[property="product:creation_date"], meta[name="creation_date"], meta[itemprop="dateCreated"]');
+    if (metaEl && metaEl.content) {
+      creationDate = parseCreationDateText(metaEl.content);
+    }
+
+    // 8.2 Subtítulo, cabeçalho e elementos de características do anúncio
+    if (!creationDate) {
+      const candidateElements = documentRoot.querySelectorAll('.ui-pdp-subtitle, .ui-pdp-header__subtitle, .ui-pdp-promotions-pill-label, .ui-pdp-description, [class*="creation" i], [class*="created" i]');
+      for (const el of candidateElements) {
+        const txt = el.textContent || '';
+        const parsed = parseCreationDateText(txt);
+        if (parsed) {
+          creationDate = parsed;
+          break;
+        }
+      }
+    }
+  }
+
   return {
     id,
     type,
@@ -306,6 +384,7 @@ export function extractProductPageData(documentRoot) {
     },
     soldQuantity,
     availableStock,
+    creationDate,
     seller: {
       name: sellerName,
     },
