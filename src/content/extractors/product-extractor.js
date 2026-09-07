@@ -179,6 +179,169 @@ export function parseCreationDateText(text, now = new Date()) {
 }
 
 /**
+ * Extrai dados estruturados incorporados na página de produto (application/ld+json, melidata event_data, etc.) (TASK-032).
+ * Serve como camada complementar de extração para obter dados legítimos do Mercado Livre quando seletores visuais não os encontram.
+ *
+ * @param {Document|Element} root - Raiz do documento ou contêiner.
+ * @returns {object} Objeto com campos estruturados observados na página.
+ */
+function extractStructuredPageData(root) {
+  const result = {
+    id: null,
+    title: null,
+    price: null,
+    originalPrice: null,
+    soldQuantity: null,
+    availableStock: null,
+    sellerName: null,
+    sellerSales: null,
+    sellerLocation: null,
+    sellerId: null,
+    powerSellerStatus: null,
+    reputationLevel: null,
+    ratingScore: null,
+    reviewsCount: null,
+    isFreeShipping: false,
+    isFull: false,
+    isCatalog: null,
+    returnAvailable: null,
+    creationDate: null,
+    installmentInfo: null,
+  };
+
+  if (!root || typeof root.querySelectorAll !== 'function') return result;
+
+  // 1. Parse de scripts application/ld+json
+  try {
+    const ldScripts = root.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of ldScripts) {
+      const content = (script.textContent || '').trim();
+      if (!content) continue;
+      try {
+        const parsed = JSON.parse(content);
+        const items = Array.isArray(parsed) ? parsed : [parsed];
+        for (const item of items) {
+          if (item && typeof item === 'object') {
+            if (item['@type'] === 'Product' || item.offers || item.name) {
+              if (item.name && !result.title) result.title = item.name;
+              if ((item.sku || item.productID) && !result.id) {
+                const rawId = String(item.sku || item.productID);
+                if (/^MLB\d+$/i.test(rawId)) result.id = rawId;
+              }
+              if (item.brand) {
+                const bName = typeof item.brand === 'string' ? item.brand : (item.brand.name || null);
+                if (bName && !result.sellerName) result.sellerName = bName;
+              }
+              if (item.offers) {
+                const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
+                if (offer && typeof offer.price === 'number' && result.price === null) {
+                  result.price = offer.price;
+                }
+                if (offer && offer.availability === 'https://schema.org/InStock') {
+                  if (result.availableStock === null) result.availableStock = 1;
+                }
+                if (offer && offer.hasMerchantReturnPolicy) {
+                  result.returnAvailable = true;
+                }
+              }
+              if (item.aggregateRating && typeof item.aggregateRating === 'object') {
+                if (typeof item.aggregateRating.ratingValue === 'number') {
+                  result.ratingScore = item.aggregateRating.ratingValue;
+                }
+                const cnt = item.aggregateRating.ratingCount || item.aggregateRating.reviewCount;
+                if (typeof cnt === 'number') {
+                  result.reviewsCount = cnt;
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignora JSONs malformados
+      }
+    }
+  } catch {
+    // Ignora
+  }
+
+  // 2. Parse de chamadas melidata("add", "event_data", {...}) e JSONs inline
+  try {
+    const scripts = root.querySelectorAll('script');
+    for (const script of scripts) {
+      const txt = script.textContent || '';
+      if (txt.includes('melidata') && txt.includes('event_data')) {
+        const match = txt.match(/melidata\(\s*["']add["']\s*,\s*["']event_data["']\s*,\s*({.*?})\s*\);/s);
+        if (match) {
+          try {
+            const ev = JSON.parse(match[1]);
+            if (ev && typeof ev === 'object') {
+              if (ev.item_id && !result.id) {
+                result.id = String(ev.item_id);
+              }
+              if (ev.seller_id) {
+                result.sellerId = String(ev.seller_id);
+              }
+              if (typeof ev.sold_quantity === 'number' && ev.sold_quantity >= 0 && result.soldQuantity === null) {
+                result.soldQuantity = ev.sold_quantity;
+              }
+              if (typeof ev.quantity === 'number' && ev.quantity > 0 && (result.availableStock === null || result.availableStock === 1)) {
+                result.availableStock = ev.quantity;
+              }
+              if (typeof ev.catalog_listing === 'boolean' && result.isCatalog === null) {
+                result.isCatalog = ev.catalog_listing;
+              }
+              if (ev.power_seller_status) {
+                result.powerSellerStatus = String(ev.power_seller_status);
+                if (ev.power_seller_status === 'platinum' && !result.sellerSales) {
+                  result.sellerSales = 'MercadoLíder Platinum';
+                } else if (ev.power_seller_status === 'gold' && !result.sellerSales) {
+                  result.sellerSales = 'MercadoLíder Gold';
+                }
+              }
+              if (ev.reputation_level && !result.reputationLevel) {
+                result.reputationLevel = String(ev.reputation_level);
+              }
+              if (typeof ev.return_available === 'boolean' && result.returnAvailable === null) {
+                result.returnAvailable = ev.return_available;
+              }
+              if (ev.installment_info && !result.installmentInfo) {
+                result.installmentInfo = String(ev.installment_info);
+              }
+            }
+          } catch {
+            // Ignora
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignora
+  }
+
+  // 3. Fallbacks de textos DOM para dados do vendedor
+  try {
+    if (!result.sellerSales) {
+      const sellerStatusEl = root.querySelector('.ui-seller-data-status__info, .ui-pdp-seller-summary__header__subtitle');
+      if (sellerStatusEl) {
+        const text = (sellerStatusEl.textContent || '').trim();
+        if (text) result.sellerSales = text;
+      }
+    }
+    if (!result.sellerLocation) {
+      const locEl = root.querySelector('.ui-seller-data-status__info-location, .ui-seller-info__status-info-location');
+      if (locEl) {
+        const text = (locEl.textContent || '').trim();
+        if (text) result.sellerLocation = text;
+      }
+    }
+  } catch {
+    // Ignora
+  }
+
+  return result;
+}
+
+/**
  * Função pura que extrai e normaliza os dados de uma página de detalhe de produto (PDP).
  * Não realiza mutações no DOM, não chama APIs de rede ou storage, e não executa cálculos de negócio.
  * 
@@ -210,6 +373,9 @@ export function extractProductPageData(documentRoot) {
     };
   }
 
+  // Camada de extração de dados estruturados incorporarados na página (TASK-032)
+  const structured = extractStructuredPageData(documentRoot);
+
   // 1. URL e Identidade Canônica
   const rawUrl = resolveProductUrl(documentRoot);
   let cleanUrl = '';
@@ -231,6 +397,9 @@ export function extractProductPageData(documentRoot) {
       type = 'STANDARD';
     }
   }
+  if (!id && structured.id) {
+    id = structured.id;
+  }
 
   // 2. Título do Produto
   let title = '';
@@ -238,13 +407,19 @@ export function extractProductPageData(documentRoot) {
   if (titleEl) {
     title = (titleEl.textContent || '').trim();
   }
+  if (!title && structured.title) {
+    title = structured.title;
+  }
 
   // 3. Preços e Desconto
   const currentPriceEl = queryFirst(documentRoot, SELECTORS.PRODUCT.CURRENT_PRICE);
-  const currentPrice = parseMonetaryValue(currentPriceEl);
+  let currentPrice = parseMonetaryValue(currentPriceEl);
+  if (currentPrice === null && structured.price !== null) {
+    currentPrice = structured.price;
+  }
 
   const oldPriceEl = queryFirst(documentRoot, SELECTORS.PRODUCT.OLD_PRICE);
-  const originalPrice = parseMonetaryValue(oldPriceEl);
+  let originalPrice = parseMonetaryValue(oldPriceEl);
 
   let discountPercent = null;
   const discountEl = queryFirst(documentRoot, SELECTORS.PRODUCT.DISCOUNT);
@@ -259,12 +434,12 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
-  // 4. Quantidade Vendida (Subtitle / Header subtitle)
+  // 4. Quantidade Vendida (Subtitle / Header subtitle / Structured Data)
   let soldQuantity = null;
   const subtitleEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SUBTITLE_SALES);
   if (subtitleEl) {
     const subtitleText = (subtitleEl.textContent || '').trim();
-    // Captura formatos explícitos como "+1000 vendidos", "+50 mil vendidos", "23 vendidos"
+    // Captura formatos explícitos como "+1000 vendidos", "+50 mil vendidos", "+10 mil vendidos", "23 vendidos"
     const salesMatch = subtitleText.match(/(?:\+\s*)?([\d.,]+)\s*(mil)?\s*vendidos?\b/i);
     if (salesMatch) {
       let numStr = salesMatch[1].replace(/\./g, '').replace(',', '.');
@@ -281,34 +456,41 @@ export function extractProductPageData(documentRoot) {
       }
     }
   }
+  if (soldQuantity === null && structured.soldQuantity !== null) {
+    soldQuantity = structured.soldQuantity;
+  }
 
   // 5. Estoque Disponível
   let availableStock = null;
-  const stockEl = queryFirst(documentRoot, SELECTORS.PRODUCT.STOCK);
-  if (stockEl) {
-    const stockText = (stockEl.textContent || '').trim();
-    if (/último\s+disponível\b/i.test(stockText)) {
-      availableStock = 1;
-    } else {
-      const stockMatch = stockText.match(/(?:\(\s*\+?\s*|\brestam\s+|\bapenas\s+)(\d+)(?:\s*(?:disponíveis|unidades|peças)|\s*\))/i);
-      if (stockMatch) {
-        const parsed = parseInt(stockMatch[1], 10);
-        if (!isNaN(parsed) && parsed > 0) {
-          availableStock = parsed;
-        }
+  if (structured.availableStock !== null) {
+    availableStock = structured.availableStock;
+  } else {
+    const stockEl = queryFirst(documentRoot, SELECTORS.PRODUCT.STOCK);
+    if (stockEl) {
+      const stockText = (stockEl.textContent || '').trim();
+      if (/último\s+disponível\b/i.test(stockText)) {
+        availableStock = 1;
       } else {
-        const simpleMatch = stockText.match(/\+?(\d+)\s+(?:disponíveis|unidades)/i);
-        if (simpleMatch) {
-          const parsed = parseInt(simpleMatch[1], 10);
+        const stockMatch = stockText.match(/(?:\(\s*\+?\s*|\brestam\s+|\bapenas\s+)(\d+)(?:\s*(?:disponíveis|unidades|peças)|\s*\))/i);
+        if (stockMatch) {
+          const parsed = parseInt(stockMatch[1], 10);
           if (!isNaN(parsed) && parsed > 0) {
             availableStock = parsed;
+          }
+        } else {
+          const simpleMatch = stockText.match(/\+?(\d+)\s+(?:disponíveis|unidades)/i);
+          if (simpleMatch) {
+            const parsed = parseInt(simpleMatch[1], 10);
+            if (!isNaN(parsed) && parsed > 0) {
+              availableStock = parsed;
+            }
           }
         }
       }
     }
   }
 
-  // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030)
+  // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030 / TASK-032)
   let sellerName = null;
   let sellerSales = null;
   let sellerLocation = null;
@@ -317,9 +499,12 @@ export function extractProductPageData(documentRoot) {
   if (sellerEl) {
     const rawSeller = (sellerEl.textContent || '').trim();
     const cleaned = rawSeller.replace(/^(?:vendido\s+por|por)\s+/i, '').trim();
-    if (cleaned) {
+    if (cleaned && cleaned.length <= 50 && !/seguir|ir para a p[áa]gina|mercadol[íi]der/i.test(cleaned)) {
       sellerName = cleaned;
     }
+  }
+  if (!sellerName && structured.sellerName) {
+    sellerName = structured.sellerName;
   }
 
   const sellerSalesEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_SALES);
@@ -329,6 +514,9 @@ export function extractProductPageData(documentRoot) {
       sellerSales = rawSales;
     }
   }
+  if (!sellerSales && structured.sellerSales) {
+    sellerSales = structured.sellerSales;
+  }
 
   const sellerLocationEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_LOCATION);
   if (sellerLocationEl) {
@@ -337,6 +525,9 @@ export function extractProductPageData(documentRoot) {
       sellerLocation = rawLoc;
     }
   }
+  if (!sellerLocation && structured.sellerLocation) {
+    sellerLocation = structured.sellerLocation;
+  }
 
   // 7. Frete e Selo Full
   let isFree = false;
@@ -344,7 +535,7 @@ export function extractProductPageData(documentRoot) {
   const shippingEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SHIPPING);
   if (shippingEl) {
     const shippingText = (shippingEl.textContent || '').toLowerCase();
-    if (/frete\s+gr[áa]tis/i.test(shippingText)) {
+    if (/gr[áa]tis/i.test(shippingText)) {
       isFree = true;
     }
     if (
@@ -352,6 +543,15 @@ export function extractProductPageData(documentRoot) {
       shippingEl.querySelector('[class*="full" i], [aria-label*="full" i], svg use[href*="full" i]')
     ) {
       isFull = true;
+    }
+  }
+  if (!isFree && structured.isFreeShipping) {
+    isFree = true;
+  }
+  if (!isFree && typeof documentRoot.querySelector === 'function') {
+    const freeTextEl = documentRoot.querySelector('.ui-pdp-media--shipping, .ui-pdp-shipping, [class*="shipping" i]');
+    if (freeTextEl && /gr[áa]tis/i.test(freeTextEl.textContent || '')) {
+      isFree = true;
     }
   }
 
@@ -362,8 +562,11 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
-  // 8. Catálogo (TASK-030)
-  const isCatalog = type === 'CATALOG' || !!queryFirst(documentRoot, SELECTORS.PRODUCT.CATALOG);
+  // 8. Catálogo (TASK-030 / TASK-032)
+  let isCatalog = type === 'CATALOG' || !!queryFirst(documentRoot, SELECTORS.PRODUCT.CATALOG);
+  if (!isCatalog && structured.isCatalog === true) {
+    isCatalog = true;
+  }
 
   // 9. Visitas e Comissão ML (TASK-030 - caso legitimamente expostos no DOM)
   let visits = null;
@@ -384,21 +587,18 @@ export function extractProductPageData(documentRoot) {
     commission = parseMonetaryValue(commissionEl);
   }
 
-  // 10. Data de Criação do Anúncio (TASK-028)
-  // Observa atributos explícitos, metadados ou subtítulos caso legitimamente expostos pelo DOM
+  // 10. Data de Criação do Anúncio (TASK-028 / TASK-032)
   let creationDate = null;
   if (typeof documentRoot.getAttribute === 'function' && documentRoot.getAttribute('data-creation-date')) {
     creationDate = parseCreationDateText(documentRoot.getAttribute('data-creation-date'));
   }
 
   if (!creationDate && typeof documentRoot.querySelector === 'function') {
-    // 10.1 Meta tags de criação
     const metaEl = documentRoot.querySelector('meta[property="product:creation_date"], meta[name="creation_date"], meta[itemprop="dateCreated"]');
     if (metaEl && metaEl.content) {
       creationDate = parseCreationDateText(metaEl.content);
     }
 
-    // 10.2 Subtítulo, cabeçalho e elementos de características do anúncio
     if (!creationDate) {
       const candidateElements = documentRoot.querySelectorAll('.ui-pdp-subtitle, .ui-pdp-header__subtitle, .ui-pdp-promotions-pill-label, .ui-pdp-description, [class*="creation" i], [class*="created" i]');
       for (const el of candidateElements) {
@@ -433,7 +633,16 @@ export function extractProductPageData(documentRoot) {
       name: sellerName,
       sales: sellerSales,
       location: sellerLocation,
+      id: structured.sellerId || null,
+      powerSellerStatus: structured.powerSellerStatus || null,
+      reputationLevel: structured.reputationLevel || null,
     },
+    rating: {
+      score: structured.ratingScore || null,
+      reviewsCount: structured.reviewsCount || null,
+    },
+    returnAvailable: structured.returnAvailable !== null ? structured.returnAvailable : null,
+    installmentInfo: structured.installmentInfo || null,
     shipping: {
       isFree,
       isFull,
