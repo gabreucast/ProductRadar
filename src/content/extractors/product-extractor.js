@@ -292,10 +292,12 @@ function extractStructuredPageData(root) {
               }
               if (ev.power_seller_status) {
                 result.powerSellerStatus = String(ev.power_seller_status);
-                if (ev.power_seller_status === 'platinum' && !result.sellerSales) {
-                  result.sellerSales = 'MercadoLíder Platinum';
-                } else if (ev.power_seller_status === 'gold' && !result.sellerSales) {
-                  result.sellerSales = 'MercadoLíder Gold';
+                if (ev.power_seller_status === 'platinum') {
+                  result.reputation = 'MercadoLíder Platinum';
+                } else if (ev.power_seller_status === 'gold') {
+                  result.reputation = 'MercadoLíder Gold';
+                } else {
+                  result.reputation = String(ev.power_seller_status);
                 }
               }
               if (ev.reputation_level && !result.reputationLevel) {
@@ -320,11 +322,11 @@ function extractStructuredPageData(root) {
 
   // 3. Fallbacks de textos DOM para dados do vendedor
   try {
-    if (!result.sellerSales) {
+    if (!result.reputation) {
       const sellerStatusEl = root.querySelector('.ui-seller-data-status__info, .ui-pdp-seller-summary__header__subtitle');
       if (sellerStatusEl) {
         const text = (sellerStatusEl.textContent || '').trim();
-        if (text) result.sellerSales = text;
+        if (text && /mercadol[íi]der/i.test(text)) result.reputation = text;
       }
     }
     if (!result.sellerLocation) {
@@ -365,6 +367,9 @@ export function extractProductPageData(documentRoot) {
       availableStock: null,
       seller: {
         name: null,
+        sales: null,
+        reputation: null,
+        location: null,
       },
       shipping: {
         isFree: false,
@@ -373,7 +378,7 @@ export function extractProductPageData(documentRoot) {
     };
   }
 
-  // Camada de extração de dados estruturados incorporarados na página (TASK-032)
+  // Camada de extração de dados estruturados incorporados na página (TASK-032)
   const structured = extractStructuredPageData(documentRoot);
 
   // 1. URL e Identidade Canônica
@@ -460,7 +465,7 @@ export function extractProductPageData(documentRoot) {
     soldQuantity = structured.soldQuantity;
   }
 
-  // 5. Estoque Disponível
+  // 5. Estoque Disponível (Prioridade para dado estruturado se disponível; senão seletor visual DOM)
   let availableStock = null;
   if (structured.availableStock !== null) {
     availableStock = structured.availableStock;
@@ -490,9 +495,10 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
-  // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030 / TASK-032)
+  // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030 / TASK-032 / TASK-033)
   let sellerName = null;
   let sellerSales = null;
+  let sellerReputation = null;
   let sellerLocation = null;
 
   const sellerEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER);
@@ -507,15 +513,38 @@ export function extractProductPageData(documentRoot) {
     sellerName = structured.sellerName;
   }
 
+  // Vendas do vendedor (Apenas quantidade explícita de vendas numéricas do vendedor, ex: "+10 mil vendas nos últimos 60 dias")
   const sellerSalesEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_SALES);
   if (sellerSalesEl) {
     const rawSales = (sellerSalesEl.textContent || '').trim();
-    if (rawSales) {
+    if (rawSales && /vendas|vendidos/i.test(rawSales) && !/mercadol[íi]der/i.test(rawSales)) {
       sellerSales = rawSales;
     }
   }
-  if (!sellerSales && structured.sellerSales) {
+  if (!sellerSales && structured.sellerSales && /vendas|vendidos/i.test(structured.sellerSales)) {
     sellerSales = structured.sellerSales;
+  }
+
+  // Reputação / Status do Vendedor (ex: "MercadoLíder Platinum", "MercadoLíder Gold")
+  if (structured.reputation) {
+    sellerReputation = structured.reputation;
+  } else if (structured.powerSellerStatus) {
+    if (structured.powerSellerStatus.toLowerCase() === 'platinum') sellerReputation = 'MercadoLíder Platinum';
+    else if (structured.powerSellerStatus.toLowerCase() === 'gold') sellerReputation = 'MercadoLíder Gold';
+    else sellerReputation = structured.powerSellerStatus;
+  }
+  if (!sellerReputation) {
+    const sellerStatusEl = queryFirst(documentRoot, [
+      '.ui-seller-data-status__info',
+      '.ui-pdp-seller-summary__header__subtitle',
+      '.ui-seller-info__status-info',
+    ]);
+    if (sellerStatusEl) {
+      const txt = (sellerStatusEl.textContent || '').trim();
+      if (txt && /mercadol[íi]der/i.test(txt)) {
+        sellerReputation = txt;
+      }
+    }
   }
 
   const sellerLocationEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_LOCATION);
@@ -632,6 +661,7 @@ export function extractProductPageData(documentRoot) {
     seller: {
       name: sellerName,
       sales: sellerSales,
+      reputation: sellerReputation,
       location: sellerLocation,
       id: structured.sellerId || null,
       powerSellerStatus: structured.powerSellerStatus || null,

@@ -418,9 +418,10 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     </div>
   `;
 
-  // 2. Informações do Vendedor (TASK-030 / TASK-031 Collapsible)
+  // 2. Informações do Vendedor (TASK-030 / TASK-031 / TASK-033)
   let sellerNameDisplay = notFoundHtml;
   let sellerSalesDisplay = notFoundHtml;
+  let sellerReputationDisplay = notFoundHtml;
   let sellerLocationDisplay = notFoundHtml;
 
   if (productData && productData.seller) {
@@ -429,6 +430,10 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     }
     if (productData.seller.sales) {
       sellerSalesDisplay = `<strong style="color: #111827;">${productData.seller.sales}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+    }
+    if (productData.seller.reputation || productData.seller.powerSellerStatus) {
+      const repText = productData.seller.reputation || (productData.seller.powerSellerStatus === 'platinum' ? 'MercadoLíder Platinum' : productData.seller.powerSellerStatus);
+      sellerReputationDisplay = `<strong style="color: #111827;">${repText}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
     }
     if (productData.seller.location) {
       sellerLocationDisplay = `<strong style="color: #111827;">${productData.seller.location}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
@@ -451,6 +456,9 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
             <span style="color: #6b7280;">Vendas do vendedor:</span> <div>${sellerSalesDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
+            <span style="color: #6b7280;">Reputação do vendedor:</span> <div>${sellerReputationDisplay}</div>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
             <span style="color: #6b7280;">Localização do vendedor:</span> <div>${sellerLocationDisplay}</div>
