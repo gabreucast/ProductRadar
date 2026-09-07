@@ -10,6 +10,7 @@ import {
   PRODUCT_PATTERNS,
   DEFAULT_CONFIG,
   DATA_SOURCES,
+  DATA_SOURCE_LABELS,
   TRAFFIC_LIGHT_STATUS,
 } from './constants.js';
 
@@ -554,4 +555,17 @@ export function calculateSalesPerDay(soldQuantity, creationDate, currentDate = n
     value: salesPerDay,
     source: DATA_SOURCES.ESTIMATED,
   };
+}
+
+/**
+ * Retorna o rótulo textual legível em português correspondente à classificação de origem do dado (TASK-020).
+ *
+ * @param {string} source - Chave de origem de DATA_SOURCES.
+ * @returns {string} Rótulo descritivo em português.
+ */
+export function getDataSourceLabel(source) {
+  if (DATA_SOURCE_LABELS[source]) {
+    return DATA_SOURCE_LABELS[source];
+  }
+  return DATA_SOURCE_LABELS.UNAVAILABLE;
 }

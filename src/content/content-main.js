@@ -81,7 +81,7 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
           <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: 0.5px;">Semáforo de Resultados</span>
           <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: ${tlColor}; background: #fff; padding: 2px 8px; border-radius: 9999px; border: 1px solid ${tlColor};">
-            ● ${tl.value ? tl.value : 'INDISPONÍVEL'}
+            ● ${tl.value ? tl.value : 'INDISPONÍVEL'} [CALCULADO]
           </span>
         </div>
         <div style="font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 4px;">
@@ -97,16 +97,16 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
     `;
   }
 
-  // 2. Indicadores de Busca com Indisponibilidade Explícita ou Dados Observados (TASK-018)
+  // 2. Indicadores de Busca com Indisponibilidade Explícita ou Dados Observados (TASK-018 / TASK-020)
   let indicatorsHtml = '';
   const indicatorRows = [];
 
   if (searchVis.sales) {
     const cardsWithSales = extractedCards.filter((c) => c && typeof c.soldQuantity === 'number');
-    let salesText = '<span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span>';
+    let salesText = '<span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>';
     if (cardsWithSales.length > 0) {
       const totalObservedSales = cardsWithSales.reduce((acc, c) => acc + c.soldQuantity, 0);
-      salesText = `<strong style="color: #111827;">+${totalObservedSales.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700;">(OBSERVADO EM ${cardsWithSales.length} ITENS)</span>`;
+      salesText = `<strong style="color: #111827;">+${totalObservedSales.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO EM ${cardsWithSales.length} ITENS]</span>`;
     }
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
@@ -120,17 +120,17 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Faturamento:</span>
-        <span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span>
+        <div><span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
       </div>
     `);
   }
 
   if (searchVis.stock) {
     const cardsWithStock = extractedCards.filter((c) => c && typeof c.availableStock === 'number');
-    let stockText = '<span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span>';
+    let stockText = '<span style="color: #9ca3af; font-style: italic;">Indisponível na busca</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>';
     if (cardsWithStock.length > 0) {
       const totalObservedStock = cardsWithStock.reduce((acc, c) => acc + c.availableStock, 0);
-      stockText = `<strong style="color: #111827;">${totalObservedStock.toLocaleString('pt-BR')} unidades</strong> <span style="font-size: 10px; color: #059669; font-weight: 700;">(OBSERVADO EM ${cardsWithStock.length} ITENS)</span>`;
+      stockText = `<strong style="color: #111827;">${totalObservedStock.toLocaleString('pt-BR')} unidades</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO EM ${cardsWithStock.length} ITENS]</span>`;
     }
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
@@ -145,6 +145,9 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
       <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 6px;">Indicadores de Busca</div>
         ${indicatorRows.join('')}
+        <div style="font-size: 10px; color: #6b7280; line-height: 1.35; margin-top: 6px; border-top: 1px dashed #e5e7eb; padding-top: 6px;">
+          ℹ️ <em>Valores [OBSERVADO] vêm diretamente da listagem do Mercado Livre. Métricas ausentes são explicitamente marcadas como [INDISPONÍVEL].</em>
+        </div>
       </div>
     `;
   }
@@ -254,7 +257,7 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
 }
 
 /**
- * Renderiza ou atualiza o painel overlay isolado do ProductRadar na página de detalhes de produto (PDP) (TASK-016).
+ * Renderiza ou atualiza o painel overlay isolado do ProductRadar na página de detalhes de produto (PDP) (TASK-016 / TASK-020).
  * Combina os dados frescos da página com o contexto previamente capturado na busca, mantendo-os explicitamente separados.
  * 
  * @param {Document|Element} documentRoot - Raiz do documento ou contêiner.
@@ -302,7 +305,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Dados Observados na Página</span>
-        <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700;">PDP</span>
+        <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO NO ANÚNCIO]</span>
       </div>
       <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 6px; line-height: 1.3;" title="${pdpTitle}">
         ${pdpTitle}
@@ -334,7 +337,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
           <span style="font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase;">Contexto da Busca Anterior</span>
-          <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 6px; border-radius: 4px; font-weight: 700;">BUSCA</span>
+          <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO NA BUSCA]</span>
         </div>
         <div style="font-size: 11px; color: #166534; margin-bottom: 4px;">
           Preço na busca: <strong>${sPrice}</strong> ${sDiscount ? `<span style="color: #15803d; font-weight: 700;">(${sDiscount})</span>` : ''}
@@ -348,19 +351,19 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   } else {
     searchContextHtml = `
       <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
-        ℹ️ <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior).</em>
+        ℹ️ <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior) <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">[INDISPONÍVEL]</span>.</em>
       </div>
     `;
   }
 
-  // 3. Indicadores de Produto (Controlados por visibility.product)
+  // 3. Indicadores de Produto (Controlados por visibility.product com Semântica Estrita TASK-020)
   const indicatorRows = [];
 
   // Vendas (Observadas no PDP)
   if (prodVis.sales) {
     const salesText = productData && productData.soldQuantity !== null
-      ? `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700;">(OBSERVADO)</span>`
-      : `<span style="color: #9ca3af; font-style: italic;">Indisponível na página</span>`;
+      ? `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`
+      : `<span style="color: #9ca3af; font-style: italic;">Indisponível na página</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>`;
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Vendas declaradas:</span>
@@ -369,16 +372,16 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     `);
   }
 
-  // Imposto Estimado (Simulação ProductRadar)
+  // Imposto Estimado (Simulação do Usuário)
   if (prodVis.taxRate) {
-    let taxContent = `<span style="color: #9ca3af; font-style: italic;">Indisponível (preço ausente)</span>`;
+    let taxContent = `<span style="color: #9ca3af; font-style: italic;">Indisponível (preço ausente)</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>`;
     if (productData && productData.price && typeof productData.price.current === 'number') {
       const taxCalc = calculateEstimatedTax(productData.price.current, taxRate);
       if (taxCalc.value !== null) {
         taxContent = `
           <div style="text-align: right;">
             <strong style="color: #111827;">R$ ${taxCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-            <span style="font-size: 10px; color: #2563eb; font-weight: 700;">(${taxRate}% CALCULADO)</span>
+            <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[SIMULAÇÃO / CALCULADO]</span>
           </div>
         `;
       }
@@ -389,7 +392,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         <div>${taxContent}</div>
       </div>
       <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-        ℹ️ <em>Simulação do usuário com alíquota de ${taxRate}%. Não observado no Mercado Livre.</em>
+        ℹ️ <em>Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.</em>
       </div>
     `);
   }
@@ -399,7 +402,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Faturamento:</span>
-        <span style="color: #9ca3af; font-style: italic;">Indisponível</span>
+        <div><span style="color: #9ca3af; font-style: italic;">Indisponível</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
       </div>
     `);
   }
@@ -409,7 +412,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Margem líquida:</span>
-        <span style="color: #9ca3af; font-style: italic;">Indisponível (requer custo fornecedor)</span>
+        <div><span style="color: #9ca3af; font-style: italic;">Indisponível (requer custo fornecedor)</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
       </div>
     `);
   }
@@ -419,7 +422,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     indicatorRows.push(`
       <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
         <span style="color: #4b5563;">Semáforo:</span>
-        <span style="color: #9ca3af; font-style: italic;">Indisponível no produto individual</span>
+        <div><span style="color: #9ca3af; font-style: italic;">Indisponível no produto individual</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
       </div>
     `);
   }

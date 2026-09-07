@@ -38,12 +38,20 @@ export const STORAGE_KEYS = Object.freeze({
 // Versão do esquema de configuração para suportar migrações futuras com segurança
 export const CONFIG_SCHEMA_VERSION = 1;
 
-// Classificação de Origem e Confiança dos Dados (TASK-013)
+// Classificação de Origem e Confiança dos Dados (TASK-013 / TASK-020)
 export const DATA_SOURCES = Object.freeze({
   OBSERVED: 'OBSERVED',       // Extraído diretamente do DOM público do Mercado Livre
   CALCULATED: 'CALCULATED',   // Derivado de fórmulas matemáticas a partir de dados observados/configurados
   ESTIMATED: 'ESTIMATED',     // Estimativa derivada (ex: vendas por dia via data de criação)
   UNAVAILABLE: 'UNAVAILABLE', // Dados ou parâmetros de entrada ausentes/insuficientes
+});
+
+// Rótulos em Português para Apresentação Visual da Origem dos Dados (TASK-020)
+export const DATA_SOURCE_LABELS = Object.freeze({
+  OBSERVED: 'OBSERVADO',
+  CALCULATED: 'CALCULADO',
+  ESTIMATED: 'ESTIMADO',
+  UNAVAILABLE: 'INDISPONÍVEL',
 });
 
 // Estados de Semáforo de Oportunidade por Quantidade de Resultados (TASK-013)
