@@ -152,6 +152,9 @@ export const SELECTORS = Object.freeze({
     STOCK: Object.freeze([
       '.ui-pdp-buybox__quantity__available',
       '.ui-pdp-stock-information',
+      '.ui-pdp-stock-information__title',
+      '[class*="quantity__available" i]',
+      '[class*="stock-information" i]',
     ]),
     SELLER: Object.freeze([
       '.ui-pdp-seller__link-trigger',

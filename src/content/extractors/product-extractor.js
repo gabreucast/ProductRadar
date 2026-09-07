@@ -465,34 +465,35 @@ export function extractProductPageData(documentRoot) {
     soldQuantity = structured.soldQuantity;
   }
 
-  // 5. Estoque Disponível (Prioridade para dado estruturado se disponível; senão seletor visual DOM)
+  // 5. Estoque Disponível da Variação Selecionada (TASK-032)
   let availableStock = null;
-  if (structured.availableStock !== null) {
-    availableStock = structured.availableStock;
-  } else {
-    const stockEl = queryFirst(documentRoot, SELECTORS.PRODUCT.STOCK);
-    if (stockEl) {
-      const stockText = (stockEl.textContent || '').trim();
-      if (/último\s+disponível\b/i.test(stockText)) {
-        availableStock = 1;
+  const stockEl = queryFirst(documentRoot, SELECTORS.PRODUCT.STOCK);
+  if (stockEl) {
+    const stockText = (stockEl.textContent || '').trim();
+    if (/último\s+disponível\b/i.test(stockText)) {
+      availableStock = 1;
+    } else {
+      const stockMatch = stockText.match(/(?:\(\s*\+?\s*|\brestam\s+|\bapenas\s+)(\d+)(?:\s*(?:disponíveis|unidades|peças)|\s*\))/i);
+      if (stockMatch) {
+        const parsed = parseInt(stockMatch[1], 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          availableStock = parsed;
+        }
       } else {
-        const stockMatch = stockText.match(/(?:\(\s*\+?\s*|\brestam\s+|\bapenas\s+)(\d+)(?:\s*(?:disponíveis|unidades|peças)|\s*\))/i);
-        if (stockMatch) {
-          const parsed = parseInt(stockMatch[1], 10);
+        const simpleMatch = stockText.match(/\+?(\d+)\s+(?:disponíveis|unidades|peças)/i);
+        if (simpleMatch) {
+          const parsed = parseInt(simpleMatch[1], 10);
           if (!isNaN(parsed) && parsed > 0) {
             availableStock = parsed;
-          }
-        } else {
-          const simpleMatch = stockText.match(/\+?(\d+)\s+(?:disponíveis|unidades)/i);
-          if (simpleMatch) {
-            const parsed = parseInt(simpleMatch[1], 10);
-            if (!isNaN(parsed) && parsed > 0) {
-              availableStock = parsed;
-            }
           }
         }
       }
     }
+  }
+
+  // Fallback para dado estruturado se o seletor visual da variação não esteve presente ou não conteve valor numérico
+  if (availableStock === null && structured.availableStock !== null) {
+    availableStock = structured.availableStock;
   }
 
   // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030 / TASK-032 / TASK-033)
