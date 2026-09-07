@@ -315,6 +315,12 @@ function extractStructuredPageData(root) {
           }
         }
       }
+      if (!result.creationDate) {
+        const startTimeMatch = txt.match(/["']?(?:startTime|date_created)["']?\s*:\s*["']([^"'\s]+)["']/);
+        if (startTimeMatch) {
+          result.creationDate = startTimeMatch[1];
+        }
+      }
     }
   } catch {
     // Ignora
@@ -640,6 +646,10 @@ export function extractProductPageData(documentRoot) {
         }
       }
     }
+  }
+
+  if (!creationDate && structured.creationDate) {
+    creationDate = parseCreationDateText(structured.creationDate) || structured.creationDate;
   }
 
   return {
