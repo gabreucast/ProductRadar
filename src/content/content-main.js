@@ -26,6 +26,11 @@ import {
 // desnecessárias no mesmo ciclo de vida estático do DOM
 const processedProductIds = new Set();
 
+// Referências de controle para observação de mutações do DOM e temporizadores (TASK-024)
+let activeObserver = null;
+let activeDebounceTimer = null;
+let activeMaxTimeout = null;
+
 /**
  * Renderiza ou atualiza o painel overlay isolado do ProductRadar na página de busca.
  * Não altera e não injeta elementos dentro dos cards nativos do Mercado Livre.
@@ -729,27 +734,152 @@ export async function runContentScriptOrchestration(
 }
 
 /**
- * Função utilitária para resetar o cache em memória de processamento (usado em testes ou re-inicializações).
+ * Interrompe qualquer observador de mutação e limpa temporizadores ativos de observação (TASK-024).
  */
-export function resetOrchestrationState() {
-  processedProductIds.clear();
+export function stopDynamicContentObserver() {
+  if (activeDebounceTimer) {
+    clearTimeout(activeDebounceTimer);
+    activeDebounceTimer = null;
+  }
+  if (activeMaxTimeout) {
+    clearTimeout(activeMaxTimeout);
+    activeMaxTimeout = null;
+  }
+  if (activeObserver) {
+    try {
+      activeObserver.disconnect();
+    } catch {
+      // Ignora erro ao desconectar
+    }
+    activeObserver = null;
+  }
 }
 
 /**
- * Inicialização automática no carregamento do content script no navegador.
+ * Inicia a observação reativa e limitada por tempo de mutações no DOM para capturar renderização dinâmica (TASK-024).
+ * Utiliza debounce para coalescer mutações e desliga o observador automaticamente após estabilização ou timeout.
+ *
+ * @param {Document|Element} [documentRoot=document] - Raiz do documento ou contêiner DOM.
+ * @param {string|URL} [currentUrl=window.location.href] - URL da página ativa.
+ * @param {object} [options={}] - Opções de configuração do observador.
+ * @param {number} [options.debounceMs=250] - Janela de debounce em milissegundos.
+ * @param {number} [options.maxWaitMs=10000] - Tempo máximo de observação em milissegundos.
+ * @returns {MutationObserver|null} Instância do MutationObserver ou null.
+ */
+export function observeDynamicContent(
+  documentRoot = (typeof document !== 'undefined' ? document : null),
+  currentUrl = (typeof window !== 'undefined' && window.location ? window.location.href : ''),
+  options = {}
+) {
+  if (!documentRoot || !currentUrl) return null;
+  if (typeof MutationObserver === 'undefined') return null;
+
+  const doc = documentRoot.ownerDocument || (documentRoot.nodeType === 9 ? documentRoot : document);
+  const targetNode = doc.body || (doc.documentElement || documentRoot);
+  if (!targetNode) return null;
+
+  stopDynamicContentObserver();
+
+  const debounceMs = typeof options.debounceMs === 'number' ? options.debounceMs : 250;
+  const maxWaitMs = typeof options.maxWaitMs === 'number' ? options.maxWaitMs : 10000;
+
+  const context = classifyPageContext(currentUrl, documentRoot);
+  if (context === PAGE_CONTEXTS.UNSUPPORTED) {
+    return null;
+  }
+
+  const checkStabilization = (orchResult) => {
+    if (!orchResult) return false;
+    if (context === PAGE_CONTEXTS.SEARCH_RESULTS) {
+      const hasCount = extractSearchResultCount(documentRoot) !== null;
+      const cards = extractSearchPageData(documentRoot);
+      return hasCount && Array.isArray(cards) && cards.length > 0;
+    }
+    if (context === PAGE_CONTEXTS.PRODUCT_DETAIL) {
+      const p = extractProductPageData(documentRoot);
+      return Boolean(p && p.title && p.price && p.price.current !== null);
+    }
+    return true;
+  };
+
+  const executeOrchestration = async () => {
+    try {
+      const res = await runContentScriptOrchestration(documentRoot, currentUrl);
+      if (checkStabilization(res)) {
+        stopDynamicContentObserver();
+      }
+    } catch (err) {
+      console.warn('[ProductRadar] Erro durante re-orquestração por mutação:', err);
+    }
+  };
+
+  // Agenda timeout de término máximo para garantir execução finita e limitada
+  activeMaxTimeout = setTimeout(() => {
+    stopDynamicContentObserver();
+  }, maxWaitMs);
+
+  activeObserver = new MutationObserver((mutations) => {
+    // Ignora mutações geradas pelos próprios overlays do ProductRadar
+    const isOurMutation = mutations.every((m) => {
+      const target = m.target && m.target.nodeType === 1 ? m.target : (m.target ? m.target.parentElement : null);
+      return target && typeof target.closest === 'function' && target.closest('[data-productradar-root]');
+    });
+    if (isOurMutation) return;
+
+    if (activeDebounceTimer) {
+      clearTimeout(activeDebounceTimer);
+    }
+    activeDebounceTimer = setTimeout(() => {
+      executeOrchestration();
+    }, debounceMs);
+  });
+
+  try {
+    activeObserver.observe(targetNode, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  } catch (err) {
+    console.warn('[ProductRadar] Falha ao iniciar MutationObserver:', err);
+    stopDynamicContentObserver();
+    return null;
+  }
+
+  return activeObserver;
+}
+
+/**
+ * Função utilitária para resetar o cache em memória de processamento e observadores (usado em testes ou re-inicializações).
+ */
+export function resetOrchestrationState() {
+  processedProductIds.clear();
+  stopDynamicContentObserver();
+}
+
+/**
+ * Inicialização automática no carregamento do content script no navegador com suporte a prontidão reativa (TASK-024).
  */
 export function initContentScript() {
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const start = async () => {
+      try {
+        await runContentScriptOrchestration(document, window.location.href);
+        const context = classifyPageContext(window.location.href, document);
+        if (context !== PAGE_CONTEXTS.UNSUPPORTED) {
+          observeDynamicContent(document, window.location.href);
+        }
+      } catch (err) {
+        console.warn('[ProductRadar] Falha na orquestração automática:', err);
+      }
+    };
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
-        runContentScriptOrchestration(document, window.location.href).catch((err) => {
-          console.warn('[ProductRadar] Falha na orquestração automática:', err);
-        });
+        start();
       }, { once: true });
     } else {
-      runContentScriptOrchestration(document, window.location.href).catch((err) => {
-        console.warn('[ProductRadar] Falha na orquestração automática:', err);
-      });
+      start();
     }
   }
 }
