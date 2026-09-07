@@ -645,6 +645,9 @@ export async function runProductOrchestration(
   let productData = null;
   try {
     productData = extractProductPageData(documentRoot);
+    if (productData && !productData.id && currentUrl) {
+      productData.id = extractCanonicalProductId(currentUrl);
+    }
   } catch (err) {
     console.warn('[ProductRadar] Erro ao extrair dados da página de produto:', err);
     return {
@@ -655,11 +658,12 @@ export async function runProductOrchestration(
     };
   }
 
-  // 3. Recuperação do contexto de busca previamente armazenado para o ID canônico (TASK-008)
+  // 3. Recuperação do contexto de busca previamente armazenado para o ID canônico (TASK-008 / TASK-021)
   let searchContext = null;
-  if (productData && productData.id) {
+  const targetId = (productData && productData.id) || (currentUrl ? extractCanonicalProductId(currentUrl) : null);
+  if (targetId) {
     try {
-      searchContext = await getProductSearchContext(productData.id);
+      searchContext = await getProductSearchContext(targetId);
     } catch (err) {
       console.warn('[ProductRadar] Erro ao recuperar contexto de busca para produto:', err);
       searchContext = null;

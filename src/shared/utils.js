@@ -112,18 +112,45 @@ export function extractCanonicalProductId(url) {
     return null;
   }
 
+  // 1. Se a URL for um redirecionamento ou anúncio patrocinado com URL interna encapsulada
+  if (parsed.searchParams) {
+    const targetUrlParam = parsed.searchParams.get('url') ||
+      parsed.searchParams.get('item_url') ||
+      parsed.searchParams.get('target_url') ||
+      parsed.searchParams.get('mclics_url') ||
+      parsed.searchParams.get('click_url');
+
+    if (targetUrlParam) {
+      try {
+        const unescaped = decodeURIComponent(targetUrlParam);
+        const innerId = extractCanonicalProductId(unescaped);
+        if (innerId) {
+          return innerId;
+        }
+      } catch {
+        // Ignora e continua para o pathname
+      }
+    }
+  }
+
   const pathname = parsed.pathname;
 
-  // 1. Tentar correspondência com URL de catálogo (/p/MLB...)
+  // 2. Tentar correspondência com URL de catálogo (/p/MLB...)
   const catalogMatch = PRODUCT_PATTERNS.CATALOG_URL_PATH.exec(pathname);
   if (catalogMatch && catalogMatch[1]) {
     return normalizeProductId(catalogMatch[1]);
   }
 
-  // 2. Tentar correspondência com URL de anúncio direto (/MLB-...)
+  // 3. Tentar correspondência com URL de anúncio direto (/MLB-...)
   const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
   if (standardMatch && standardMatch[1]) {
     return normalizeProductId(standardMatch[1]);
+  }
+
+  // 4. Correspondência robusta de qualquer segmento contendo MLB + dígitos no pathname
+  const generalMatch = /(?:^|\/)(MLB-?\d{6,14})(?:[_\/-]|$)/i.exec(pathname);
+  if (generalMatch && generalMatch[1]) {
+    return normalizeProductId(generalMatch[1]);
   }
 
   return null;
@@ -139,6 +166,27 @@ export function extractProductIdentity(url) {
   const parsed = parseMercadoLivreUrl(url);
   if (!parsed) {
     return null;
+  }
+
+  // Se a URL for um redirecionamento ou anúncio patrocinado com URL interna encapsulada
+  if (parsed.searchParams) {
+    const targetUrlParam = parsed.searchParams.get('url') ||
+      parsed.searchParams.get('item_url') ||
+      parsed.searchParams.get('target_url') ||
+      parsed.searchParams.get('mclics_url') ||
+      parsed.searchParams.get('click_url');
+
+    if (targetUrlParam) {
+      try {
+        const unescaped = decodeURIComponent(targetUrlParam);
+        const innerIdentity = extractProductIdentity(unescaped);
+        if (innerIdentity) {
+          return innerIdentity;
+        }
+      } catch {
+        // Ignora e continua
+      }
+    }
   }
 
   const pathname = parsed.pathname;
@@ -157,6 +205,17 @@ export function extractProductIdentity(url) {
   const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
   if (standardMatch && standardMatch[1]) {
     const id = normalizeProductId(standardMatch[1]);
+    if (id) {
+      return {
+        id,
+        type: PRODUCT_ID_TYPES.STANDARD,
+      };
+    }
+  }
+
+  const generalMatch = /(?:^|\/)(MLB-?\d{6,14})(?:[_\/-]|$)/i.exec(pathname);
+  if (generalMatch && generalMatch[1]) {
+    const id = normalizeProductId(generalMatch[1]);
     if (id) {
       return {
         id,
@@ -278,8 +337,41 @@ export function classifyPageContext(urlInput, rootElement = null) {
 }
 
 /**
- * Extrai determinísticamente a quantidade total de resultados a partir do cabeçalho da página de busca (TASK-014).
- * Converte textos como "1.420 resultados", "500 produtos", "120 resultados" em número inteiro.
+ * Converte strings com contagem de resultados (ex: "+9.999 resultados", "1.420 resultados", "Mais de 10 mil produtos")
+ * em número inteiro positivo, suportando separadores de milhar com ponto e multiplicador "mil" (TASK-021).
+ *
+ * @param {string} text - Texto bruto observado no cabeçalho.
+ * @returns {number|null} Quantidade numérica ou null se inválida.
+ */
+export function parseSearchResultCountText(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+
+  const clean = text.trim();
+  const match = clean.match(/(?:mais\s+de\s+)?(?:\+\s*)?([\d.,]+)\s*(mil)?\s*(?:resultados?|produtos?)/i);
+  if (!match) {
+    return null;
+  }
+
+  let numStr = match[1].replace(/\./g, '').replace(',', '.');
+  let count = parseFloat(numStr);
+  if (isNaN(count) || count < 0) {
+    return null;
+  }
+
+  if (match[2] && match[2].toLowerCase() === 'mil') {
+    count = Math.round(count * 1000);
+  } else {
+    count = Math.round(count);
+  }
+
+  return count >= 0 ? count : null;
+}
+
+/**
+ * Extrai determinísticamente a quantidade total de resultados a partir do cabeçalho da página de busca (TASK-014 / TASK-021).
+ * Suporta formatos reais do Mercado Livre ("+9.999 resultados", "1.420 resultados", "500 produtos", "+10 mil resultados").
  * 
  * @param {Document|Element} documentRoot - Raiz do documento ou contêiner de busca.
  * @returns {number|null} Quantidade total de resultados observada ou null se indisponível.
@@ -291,27 +383,48 @@ export function extractSearchResultCount(documentRoot) {
 
   const candidateSelectors = [
     '.ui-search-search-result__quantity-results',
+    '.ui-search-search-result__quantity',
+    '.ui-search-search-result',
     '.ui-search-breadcrumb__title',
     '.ui-search-results-count',
+    'span.ui-search-search-result__quantity-results',
+    'span[class*="quantity-results" i]',
+    '[class*="quantity-results" i]',
+    '[class*="results-count" i]',
+    '[class*="search-result__quantity" i]',
+    '.ui-search-head .ui-search-search-result',
+    '.ui-search-head',
+    '.ui-search-breadcrumb',
   ];
 
   for (const sel of candidateSelectors) {
     try {
       const el = documentRoot.querySelector(sel);
       if (el) {
-        const text = (el.textContent || '').trim();
-        const match = text.match(/([\d.]+)\s*(?:resultados?|produtos?)/i);
-        if (match) {
-          const numStr = match[1].replace(/\./g, '');
-          const count = parseInt(numStr, 10);
-          if (!isNaN(count) && count >= 0) {
-            return count;
-          }
+        const count = parseSearchResultCountText(el.textContent);
+        if (count !== null) {
+          return count;
         }
       }
     } catch {
       // Ignora e continua
     }
+  }
+
+  // Fallback em nós de cabeçalho / resumo
+  try {
+    const headerNodes = documentRoot.querySelectorAll('h1, h2, span, p, div.ui-search-head');
+    for (const node of headerNodes) {
+      const text = (node.textContent || '').trim();
+      if (text.length < 120 && /(?:resultados?|produtos?)/i.test(text)) {
+        const count = parseSearchResultCountText(text);
+        if (count !== null) {
+          return count;
+        }
+      }
+    }
+  } catch {
+    // Ignora
   }
 
   return null;

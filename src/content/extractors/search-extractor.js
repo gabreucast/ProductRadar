@@ -110,8 +110,28 @@ function extractCardData(card, baseUri) {
   if (rawHref) {
     try {
       parsedUrl = new URL(rawHref, baseUri);
-      // O permalink limpo mantém apenas origin + pathname (sem query params e sem hash)
-      cleanUrl = `${parsedUrl.origin}${parsedUrl.pathname}`;
+
+      // Se a URL do card for um link de redirecionamento ou publicidade (ex: mclics)
+      const targetUrlParam = parsedUrl.searchParams && (
+        parsedUrl.searchParams.get('url') ||
+        parsedUrl.searchParams.get('item_url') ||
+        parsedUrl.searchParams.get('target_url') ||
+        parsedUrl.searchParams.get('mclics_url') ||
+        parsedUrl.searchParams.get('click_url')
+      );
+
+      if (targetUrlParam) {
+        try {
+          const unescaped = decodeURIComponent(targetUrlParam);
+          const innerParsed = new URL(unescaped, baseUri);
+          cleanUrl = `${innerParsed.origin}${innerParsed.pathname}`;
+        } catch {
+          cleanUrl = `${parsedUrl.origin}${parsedUrl.pathname}`;
+        }
+      } else {
+        // O permalink limpo mantém apenas origin + pathname (sem query params e sem hash)
+        cleanUrl = `${parsedUrl.origin}${parsedUrl.pathname}`;
+      }
     } catch {
       cleanUrl = '';
       parsedUrl = null;

@@ -23,8 +23,18 @@ export const SELECTORS = Object.freeze({
     ]),
     HEADER_RESULT_COUNT: Object.freeze([
       '.ui-search-search-result__quantity-results',
+      '.ui-search-search-result__quantity',
+      '.ui-search-search-result',
       '.ui-search-breadcrumb__title',
       '.ui-search-results-count',
+      'span.ui-search-search-result__quantity-results',
+      'span[class*="quantity-results" i]',
+      '[class*="quantity-results" i]',
+      '[class*="results-count" i]',
+      '[class*="search-result__quantity" i]',
+      '.ui-search-head .ui-search-search-result',
+      '.ui-search-head',
+      '.ui-search-breadcrumb',
     ]),
 
     // Delimitação de cards individuais de produto
