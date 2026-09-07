@@ -33,24 +33,27 @@ export const PRODUCT_PATTERNS = Object.freeze({
 export const STORAGE_KEYS = Object.freeze({
   CONFIG: 'product_radar_config',
   PRODUCT_CACHE: 'product_radar_cache', // Limite de esquema reservado para contexto de produtos
+  SUPPLIER_COSTS: 'product_radar_supplier_costs', // Custo do fornecedor por produto canônico (TASK-029)
 });
 
 // Versão do esquema de configuração para suportar migrações futuras com segurança
 export const CONFIG_SCHEMA_VERSION = 1;
 
-// Classificação de Origem e Confiança dos Dados (TASK-013 / TASK-020)
+// Classificação de Origem e Confiança dos Dados (TASK-013 / TASK-020 / TASK-029)
 export const DATA_SOURCES = Object.freeze({
   OBSERVED: 'OBSERVED',       // Extraído diretamente do DOM público do Mercado Livre
   CALCULATED: 'CALCULATED',   // Derivado de fórmulas matemáticas a partir de dados observados/configurados
   ESTIMATED: 'ESTIMATED',     // Estimativa derivada (ex: vendas por dia via data de criação)
+  USER_INPUT: 'USER_INPUT',   // Informado manualmente pelo usuário (ex: custo do fornecedor)
   UNAVAILABLE: 'UNAVAILABLE', // Dados ou parâmetros de entrada ausentes/insuficientes
 });
 
-// Rótulos em Português para Apresentação Visual da Origem dos Dados (TASK-020)
+// Rótulos em Português para Apresentação Visual da Origem dos Dados (TASK-020 / TASK-029)
 export const DATA_SOURCE_LABELS = Object.freeze({
   OBSERVED: 'OBSERVADO',
   CALCULATED: 'CALCULADO',
   ESTIMATED: 'ESTIMADO',
+  USER_INPUT: 'INFORMADO PELO USUÁRIO',
   UNAVAILABLE: 'INDISPONÍVEL',
 });
 

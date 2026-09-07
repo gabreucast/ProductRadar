@@ -12,6 +12,7 @@ import {
 import {
   normalizeProductId,
   isValidProductId,
+  parseMonetaryInput,
 } from './utils.js';
 
 /**
@@ -551,4 +552,103 @@ export async function removeProductSearchContext(productId) {
  */
 export async function clearProductSearchContext() {
   await setToStorage(STORAGE_KEYS.PRODUCT_CACHE, {});
+}
+
+// =============================================================================
+// SEÇÃO: PERSISTÊNCIA DE CUSTO DO FORNECEDOR POR PRODUTO CANÔNICO (TASK-029)
+// =============================================================================
+
+/**
+ * Obtém o mapa completo de custos de fornecedores armazenado em chrome.storage.local.
+ *
+ * @returns {Promise<Record<string, number>>}
+ */
+async function getSupplierCostsMap() {
+  try {
+    const raw = await getFromStorage(STORAGE_KEYS.SUPPLIER_COSTS);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return {};
+    }
+    return raw;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Salva o custo unitário do fornecedor para um produto canônico específico.
+ * Rejeita produtos sem ID canônico válido e normaliza o valor monetário.
+ *
+ * @param {string} productId - Identificador canônico do produto (ex: "MLB1234567890").
+ * @param {number|string} cost - Valor do custo em Reais (BRL).
+ * @returns {Promise<number|null>} Custo numérico salvo ou null se inválido.
+ */
+export async function saveProductSupplierCost(productId, cost) {
+  const canonicalId = normalizeProductId(productId);
+  if (!canonicalId || !isValidProductId(canonicalId)) {
+    return null;
+  }
+
+  const normalizedCost = parseMonetaryInput(cost);
+  if (normalizedCost === null) {
+    return null;
+  }
+
+  const costsMap = await getSupplierCostsMap();
+  costsMap[canonicalId] = normalizedCost;
+  await setToStorage(STORAGE_KEYS.SUPPLIER_COSTS, costsMap);
+
+  return normalizedCost;
+}
+
+/**
+ * Recupera o custo do fornecedor previamente salvo para um produto canônico.
+ *
+ * @param {string} productId - Identificador canônico do produto.
+ * @returns {Promise<number|null>} Custo numérico previamente informado ou null.
+ */
+export async function getProductSupplierCost(productId) {
+  const canonicalId = normalizeProductId(productId);
+  if (!canonicalId || !isValidProductId(canonicalId)) {
+    return null;
+  }
+
+  const costsMap = await getSupplierCostsMap();
+  if (Object.prototype.hasOwnProperty.call(costsMap, canonicalId)) {
+    const rawVal = costsMap[canonicalId];
+    return typeof rawVal === 'number' && !isNaN(rawVal) && rawVal >= 0 ? rawVal : null;
+  }
+
+  return null;
+}
+
+/**
+ * Remove o registro de custo do fornecedor associado a um produto canônico.
+ *
+ * @param {string} productId - Identificador canônico do produto.
+ * @returns {Promise<boolean>} true se removido com sucesso, false caso contrário.
+ */
+export async function removeProductSupplierCost(productId) {
+  const canonicalId = normalizeProductId(productId);
+  if (!canonicalId || !isValidProductId(canonicalId)) {
+    return false;
+  }
+
+  const costsMap = await getSupplierCostsMap();
+  if (Object.prototype.hasOwnProperty.call(costsMap, canonicalId)) {
+    delete costsMap[canonicalId];
+    await setToStorage(STORAGE_KEYS.SUPPLIER_COSTS, costsMap);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Limpa todos os custos de fornecedores armazenados em chrome.storage.local.
+ *
+ * @returns {Promise<void>}
+ */
+export async function clearProductSupplierCosts() {
+  await setToStorage(STORAGE_KEYS.SUPPLIER_COSTS, {});
 }

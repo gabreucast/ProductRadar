@@ -682,3 +682,62 @@ export function getDataSourceLabel(source) {
   }
   return DATA_SOURCE_LABELS.UNAVAILABLE;
 }
+
+/**
+ * Converte e normaliza com segurança valores monetários inseridos pelo usuário (BRL)
+ * em um número decimal float em reais com 2 casas decimais (TASK-029).
+ * Suporta formatos numéricos e strings: '30', '30,00', 'R$ 30,00', '1.250,50', '0', '0,00'.
+ * Rejeita valores negativos, vazios, não numéricos ou não finitos.
+ *
+ * @param {string|number|null|undefined} input - Valor de entrada fornecido pelo usuário.
+ * @returns {number|null} Valor numérico normalizado ou null se inválido/vazio.
+ */
+export function parseMonetaryInput(input) {
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  if (typeof input === 'number') {
+    if (isNaN(input) || !isFinite(input) || input < 0) {
+      return null;
+    }
+    return Number(input.toFixed(2));
+  }
+
+  if (typeof input !== 'string') {
+    return null;
+  }
+
+  const clean = input.trim();
+  if (!clean) {
+    return null;
+  }
+
+  // Remove prefixo de moeda R$ ou $
+  const stripped = clean.replace(/^(?:R\$\s*|\$\s*)/i, '').trim();
+  if (!stripped) {
+    return null;
+  }
+
+  // Permite apenas dígitos, pontos e vírgulas
+  if (!/^[\d.,]+$/.test(stripped)) {
+    return null;
+  }
+
+  let numStr = stripped;
+  if (numStr.includes(',')) {
+    numStr = numStr.replace(/\./g, '').replace(',', '.');
+  } else if (numStr.includes('.')) {
+    const parts = numStr.split('.');
+    if (parts.length > 2) {
+      numStr = numStr.replace(/\./g, '');
+    }
+  }
+
+  const val = parseFloat(numStr);
+  if (isNaN(val) || !isFinite(val) || val < 0) {
+    return null;
+  }
+
+  return Number(val.toFixed(2));
+}

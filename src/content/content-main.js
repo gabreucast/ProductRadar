@@ -10,12 +10,16 @@ import {
   extractSearchResultCount,
   calculateEstimatedTax,
   calculateSalesPerDay,
+  extractCanonicalProductId,
+  parseMonetaryInput,
 } from '../shared/utils.js';
 import { extractSearchPageData } from './extractors/search-extractor.js';
 import { extractProductPageData } from './extractors/product-extractor.js';
 import {
   saveMultipleProductSearchContexts,
   getProductSearchContext,
+  saveProductSupplierCost,
+  getProductSupplierCost,
   getConfig,
 } from '../shared/storage.js';
 import {
@@ -273,7 +277,7 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
  * @param {object} params.config - Configuração ativa do ProductRadar.
  * @returns {HTMLElement|null} Elemento do overlay de produto renderizado.
  */
-export function renderProductOverlay(documentRoot, { productData = null, searchContext = null, config = DEFAULT_CONFIG }) {
+export function renderProductOverlay(documentRoot, { productData = null, searchContext = null, config = DEFAULT_CONFIG, supplierCost = null }) {
   if (!documentRoot) return null;
 
   const doc = documentRoot.ownerDocument || (documentRoot.nodeType === 9 ? documentRoot : document);
@@ -325,7 +329,56 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     </div>
   `;
 
-  // 2. Contexto Herdado da Busca (Search Context)
+  // 2. Custo do Fornecedor (Entrada manual do Usuário / TASK-029)
+  const canonicalId = (productData && productData.id) || null;
+  const initialCostValue = (typeof supplierCost === 'number' && supplierCost >= 0)
+    ? supplierCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '';
+
+  let supplierCostHtml = '';
+  if (canonicalId) {
+    supplierCostHtml = `
+      <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <span style="font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase;">Custo do Fornecedor</span>
+          <span style="font-size: 10px; background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[INFORMADO PELO USUÁRIO]</span>
+        </div>
+        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 11px; color: #4b5563; font-weight: 600;">R$</span>
+          <input
+            id="productradar-supplier-cost-input"
+            type="text"
+            value="${initialCostValue}"
+            placeholder="0,00"
+            data-product-id="${canonicalId}"
+            style="flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; background: #ffffff;"
+          />
+          <button
+            id="productradar-supplier-cost-save-btn"
+            style="background: #d97706; color: #ffffff; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;"
+          >
+            Salvar
+          </button>
+        </div>
+        <div id="productradar-supplier-cost-feedback" style="font-size: 10px; min-height: 14px; margin-top: 2px;"></div>
+        <div style="font-size: 10px; color: #6b7280; margin-top: 4px; border-top: 1px dashed #fde68a; padding-top: 4px;">
+          ℹ️ <em>Valor informado manualmente pelo usuário para cálculo de rentabilidade. Não é extraído do Mercado Livre.</em>
+        </div>
+      </div>
+    `;
+  } else {
+    supplierCostHtml = `
+      <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Custo do Fornecedor</span>
+          <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">[INDISPONÍVEL]</span>
+        </div>
+        ℹ️ <em>ID do produto não identificado. Custo do fornecedor indisponível.</em>
+      </div>
+    `;
+  }
+
+  // 3. Contexto Herdado da Busca (Search Context)
   let searchContextHtml = '';
   if (searchContext) {
     const sPrice = searchContext.price && searchContext.price.current !== null
@@ -362,7 +415,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     `;
   }
 
-  // 3. Indicadores de Produto (Controlados por visibility.product com Semântica Estrita TASK-020)
+  // 4. Indicadores de Produto (Controlados por visibility.product com Semântica Estrita TASK-020)
   const indicatorRows = [];
 
   // Vendas (Observadas no PDP)
@@ -509,6 +562,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       <!-- Conteúdo do Painel -->
       <div id="productradar-pdp-content-panel" style="padding: 12px; max-height: 480px; overflow-y: auto;">
         ${pdpDetailsHtml}
+        ${supplierCostHtml}
         ${searchContextHtml}
         ${indicatorsHtml}
       </div>
@@ -526,6 +580,48 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       } else {
         contentPanel.style.display = 'none';
         toggleBtn.innerText = '□';
+      }
+    };
+  }
+
+  // Salvar Custo do Fornecedor (TASK-029)
+  const costInput = overlayEl.querySelector('#productradar-supplier-cost-input');
+  const costSaveBtn = overlayEl.querySelector('#productradar-supplier-cost-save-btn');
+  const costFeedback = overlayEl.querySelector('#productradar-supplier-cost-feedback');
+
+  if (costInput && costSaveBtn && canonicalId) {
+    const handleSave = async () => {
+      const rawVal = costInput.value;
+      const parsed = parseMonetaryInput(rawVal);
+      if (parsed === null) {
+        if (costFeedback) {
+          costFeedback.innerHTML = `<span style="color: #dc2626; font-weight: 600;">Valor inválido. Digite um valor numérico positivo.</span>`;
+        }
+        return;
+      }
+      try {
+        await saveProductSupplierCost(canonicalId, parsed);
+        costInput.value = parsed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (costFeedback) {
+          costFeedback.innerHTML = `<span style="color: #16a34a; font-weight: 600;">✓ Custo salvo com sucesso!</span>`;
+          setTimeout(() => {
+            if (costFeedback && costFeedback.innerHTML.includes('Custo salvo')) {
+              costFeedback.innerHTML = '';
+            }
+          }, 3000);
+        }
+      } catch (err) {
+        if (costFeedback) {
+          costFeedback.innerHTML = `<span style="color: #dc2626; font-weight: 600;">Erro ao salvar custo.</span>`;
+        }
+      }
+    };
+
+    costSaveBtn.onclick = handleSave;
+    costInput.onkeydown = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSave();
       }
     };
   }
@@ -698,8 +794,9 @@ export async function runProductOrchestration(
     };
   }
 
-  // 3. Recuperação do contexto de busca previamente armazenado para o ID canônico (TASK-008 / TASK-021)
+  // 3. Recuperação do contexto de busca e custo de fornecedor para o ID canônico (TASK-008 / TASK-021 / TASK-029)
   let searchContext = null;
+  let supplierCost = null;
   const targetId = (productData && productData.id) || (currentUrl ? extractCanonicalProductId(currentUrl) : null);
   if (targetId) {
     try {
@@ -707,6 +804,12 @@ export async function runProductOrchestration(
     } catch (err) {
       console.warn('[ProductRadar] Erro ao recuperar contexto de busca para produto:', err);
       searchContext = null;
+    }
+    try {
+      supplierCost = await getProductSupplierCost(targetId);
+    } catch (err) {
+      console.warn('[ProductRadar] Erro ao recuperar custo do fornecedor:', err);
+      supplierCost = null;
     }
   }
 
@@ -718,18 +821,19 @@ export async function runProductOrchestration(
     config = DEFAULT_CONFIG;
   }
 
-  // 5. Renderização do Overlay de Produto (TASK-016)
+  // 5. Renderização do Overlay de Produto (TASK-016 / TASK-029)
   try {
-    renderProductOverlay(documentRoot, { productData, searchContext, config });
+    renderProductOverlay(documentRoot, { productData, searchContext, config, supplierCost });
   } catch (err) {
     console.warn('[ProductRadar] Erro ao renderizar overlay de produto:', err);
   }
 
-  // 6. Retorno estruturado com separação explícita entre productData e searchContext
+  // 6. Retorno estruturado com separação explícita entre productData, searchContext e supplierCost
   return {
     context,
     productData,
     searchContext,
+    supplierCost,
     status: 'SUCCESS',
   };
 }
