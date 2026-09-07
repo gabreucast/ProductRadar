@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "ProductRadar",
+  "version": "0.1.0",
+  "description": "Extensão independente para análise de dados públicos de produtos no Mercado Livre Brasil.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.mercadolivre.com.br/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.mercadolivre.com.br/*"
+      ],
+      "js": [
+        "src/content/content-loader.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/content-main.js",
+        "src/content/extractors/search-extractor.js",
+        "src/content/extractors/product-extractor.js",
+        "src/content/extractors/selectors.js",
+        "src/shared/storage.js",
+        "src/shared/constants.js",
+        "src/shared/utils.js"
+      ],
+      "matches": [
+        "*://*.mercadolivre.com.br/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "ProductRadar",
+    "default_popup": "src/popup/popup.html"
+  }
+}

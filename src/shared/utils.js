@@ -1,0 +1,557 @@
+/**
+ * ProductRadar - Utilitários Compartilhados
+ * Funções puras de identidade de produtos, validação de URLs, classificação de contexto e cálculos de indicadores (TASK-003 / TASK-005 / TASK-013 / TASK-014)
+ */
+
+import {
+  ML_DOMAIN_SUFFIX,
+  ML_BASE_URL,
+  PRODUCT_ID_TYPES,
+  PRODUCT_PATTERNS,
+  DEFAULT_CONFIG,
+  DATA_SOURCES,
+  TRAFFIC_LIGHT_STATUS,
+} from './constants.js';
+
+/**
+ * Constantes para classificação de contexto de páginas do Mercado Livre Brasil.
+ */
+export const PAGE_CONTEXTS = Object.freeze({
+  SEARCH_RESULTS: 'SEARCH_RESULTS',
+  PRODUCT_DETAIL: 'PRODUCT_DETAIL',
+  UNSUPPORTED: 'UNSUPPORTED',
+});
+
+/**
+ * Validador e analisador seguro de URLs do Mercado Livre Brasil.
+ * Retorna uma instância de URL válida ou null se inválida ou fora do domínio suportado.
+ * Função pura e determinística sem efeitos colaterais.
+ * 
+ * @param {string|URL} urlInput - A URL ou string de rota a ser analisada.
+ * @returns {URL|null} Objeto URL seguro ou null.
+ */
+function parseMercadoLivreUrl(urlInput) {
+  if (!urlInput || (typeof urlInput !== 'string' && !(urlInput instanceof URL))) {
+    return null;
+  }
+
+  try {
+    const rawUrlString = typeof urlInput === 'string' ? urlInput.trim() : urlInput.href;
+    if (!rawUrlString) {
+      return null;
+    }
+
+    const isRelative = rawUrlString.startsWith('/');
+    const parsed = isRelative
+      ? new URL(rawUrlString, ML_BASE_URL)
+      : new URL(rawUrlString);
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+
+    const hostname = parsed.hostname.toLowerCase();
+    const isMlBrazil = hostname === ML_DOMAIN_SUFFIX || hostname.endsWith(`.${ML_DOMAIN_SUFFIX}`);
+    if (!isMlBrazil) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Normaliza um identificador bruto do Mercado Livre para o formato canônico padronizado (MLB + dígitos).
+ * Remove hífens e espaços, convertendo o prefixo para maiúsculas.
+ * Exemplo: 'MLB-1234567890' -> 'MLB1234567890'
+ * 
+ * @param {string} rawId - Identificador bruto a ser normalizado.
+ * @returns {string|null} Identificador canônico normalizado ou null se inválido.
+ */
+export function normalizeProductId(rawId) {
+  if (!rawId || typeof rawId !== 'string') {
+    return null;
+  }
+
+  const cleaned = rawId.trim().toUpperCase().replace(/[-\s]/g, '');
+  if (PRODUCT_PATTERNS.CANONICAL_ID.test(cleaned)) {
+    return cleaned;
+  }
+
+  return null;
+}
+
+/**
+ * Valida se uma string corresponde a um identificador de produto canônico válido.
+ * 
+ * @param {string} productId - Identificador a ser validado.
+ * @returns {boolean} true se válido, false caso contrário.
+ */
+export function isValidProductId(productId) {
+  if (!productId || typeof productId !== 'string') {
+    return false;
+  }
+  return PRODUCT_PATTERNS.CANONICAL_ID.test(productId.trim());
+}
+
+/**
+ * Extrai e normaliza o identificador canônico de um produto a partir de uma URL do Mercado Livre Brasil.
+ * Suporta anúncios diretos (/MLB-...) e produtos de catálogo (/p/MLB...).
+ * Ignora query strings (tracking, filtros) e fragmentos de hash (#wid, posições).
+ * Não tenta adivinhar IDs a partir de parâmetros de busca ou metadados de vendedor.
+ * 
+ * @param {string|URL} url - URL do produto no Mercado Livre Brasil.
+ * @returns {string|null} Identificador canônico (ex: 'MLB1234567890') ou null se não reconhecido.
+ */
+export function extractCanonicalProductId(url) {
+  const parsed = parseMercadoLivreUrl(url);
+  if (!parsed) {
+    return null;
+  }
+
+  const pathname = parsed.pathname;
+
+  // 1. Tentar correspondência com URL de catálogo (/p/MLB...)
+  const catalogMatch = PRODUCT_PATTERNS.CATALOG_URL_PATH.exec(pathname);
+  if (catalogMatch && catalogMatch[1]) {
+    return normalizeProductId(catalogMatch[1]);
+  }
+
+  // 2. Tentar correspondência com URL de anúncio direto (/MLB-...)
+  const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
+  if (standardMatch && standardMatch[1]) {
+    return normalizeProductId(standardMatch[1]);
+  }
+
+  return null;
+}
+
+/**
+ * Extrai a identidade estruturada do produto (identificador canônico e tipo de URL).
+ * 
+ * @param {string|URL} url - URL do produto no Mercado Livre Brasil.
+ * @returns {{ id: string, type: 'CATALOG'|'STANDARD' }|null} Identidade do produto ou null.
+ */
+export function extractProductIdentity(url) {
+  const parsed = parseMercadoLivreUrl(url);
+  if (!parsed) {
+    return null;
+  }
+
+  const pathname = parsed.pathname;
+
+  const catalogMatch = PRODUCT_PATTERNS.CATALOG_URL_PATH.exec(pathname);
+  if (catalogMatch && catalogMatch[1]) {
+    const id = normalizeProductId(catalogMatch[1]);
+    if (id) {
+      return {
+        id,
+        type: PRODUCT_ID_TYPES.CATALOG,
+      };
+    }
+  }
+
+  const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
+  if (standardMatch && standardMatch[1]) {
+    const id = normalizeProductId(standardMatch[1]);
+    if (id) {
+      return {
+        id,
+        type: PRODUCT_ID_TYPES.STANDARD,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Constrói uma URL canônica limpa para um identificador de produto do Mercado Livre Brasil.
+ * 
+ * @param {string} productId - Identificador bruto ou canônico do produto.
+ * @param {'STANDARD'|'CATALOG'} [type=PRODUCT_ID_TYPES.STANDARD] - Tipo de produto.
+ * @returns {string|null} URL canônica limpa ou null se o ID for inválido.
+ */
+export function buildCanonicalProductUrl(productId, type = PRODUCT_ID_TYPES.STANDARD) {
+  const canonicalId = normalizeProductId(productId);
+  if (!canonicalId) {
+    return null;
+  }
+
+  if (type === PRODUCT_ID_TYPES.CATALOG) {
+    return `${ML_BASE_URL}/p/${canonicalId}`;
+  }
+
+  const formattedStandardId = canonicalId.replace(/^MLB/, 'MLB-');
+  return `${ML_BASE_URL}/${formattedStandardId}`;
+}
+
+/**
+ * Classifica de forma determinística a página do Mercado Livre Brasil em um dos contextos:
+ * - SEARCH_RESULTS: página de resultados de busca ou listagem de produtos.
+ * - PRODUCT_DETAIL: página detalhada de produto (anúncio individual ou catálogo).
+ * - UNSUPPORTED: página fora do escopo (externa, não-Brasil, home, carrinho, ajuda, etc.).
+ * 
+ * Utiliza estrutura de URL e evidências no DOM (se fornecido).
+ * Não faz suposições heurísticas e não classifica páginas como PRODUCT_DETAIL
+ * apenas por conter identificadores MLB em query parameters.
+ * 
+ * @param {string|URL} urlInput - URL ou rota a ser classificada.
+ * @param {Element|Document|null} [rootElement=null] - Elemento raiz opcional para evidências DOM.
+ * @returns {'SEARCH_RESULTS'|'PRODUCT_DETAIL'|'UNSUPPORTED'} Contexto detectado.
+ */
+export function classifyPageContext(urlInput, rootElement = null) {
+  const parsed = parseMercadoLivreUrl(urlInput);
+  if (!parsed) {
+    return PAGE_CONTEXTS.UNSUPPORTED;
+  }
+
+  // 1. Verificação de Página de Detalhes de Produto (PRODUCT_DETAIL)
+  // Baseada em identidade canônica de produto suportada (TASK-003)
+  const canonicalId = extractCanonicalProductId(parsed);
+  if (canonicalId) {
+    return PAGE_CONTEXTS.PRODUCT_DETAIL;
+  }
+
+  // Verificação via evidência DOM de produto detalhado se o elemento raiz foi fornecido
+  if (rootElement && typeof rootElement.querySelector === 'function') {
+    const hasPdpDom = Boolean(
+      rootElement.querySelector('#ui-pdp-main-container') ||
+      rootElement.querySelector('.ui-pdp-container') ||
+      rootElement.querySelector('.ui-pdp-header') ||
+      rootElement.querySelector('h1.ui-pdp-title')
+    );
+    if (hasPdpDom) {
+      return PAGE_CONTEXTS.PRODUCT_DETAIL;
+    }
+  }
+
+  // 2. Verificação de Página de Resultados de Busca (SEARCH_RESULTS)
+  // Verificação via evidência DOM de busca se o elemento raiz foi fornecido
+  if (rootElement && typeof rootElement.querySelector === 'function') {
+    const hasSearchDom = Boolean(
+      rootElement.querySelector('.ui-search-results') ||
+      rootElement.querySelector('.ui-search-layout') ||
+      rootElement.querySelector('.poly-card') ||
+      rootElement.querySelector('.ui-search-search-result__quantity-results')
+    );
+    if (hasSearchDom) {
+      return PAGE_CONTEXTS.SEARCH_RESULTS;
+    }
+  }
+
+  // Verificação via estrutura da URL
+  const hostname = parsed.hostname.toLowerCase();
+  const pathname = parsed.pathname;
+
+  // Subdomínio de listagem (lista.mercadolivre.com.br)
+  if (hostname === 'lista.mercadolivre.com.br' || hostname.startsWith('lista.')) {
+    // Exige caminho não-vazio além da barra raiz ou query parameters
+    if (pathname.length > 1 || parsed.search.length > 1) {
+      return PAGE_CONTEXTS.SEARCH_RESULTS;
+    }
+  }
+
+  // Rotas de busca / categorias em subdomínio principal (www.mercadolivre.com.br)
+  const isSearchPath = /^\/(?:c|busca|search|jm\/search)(?:[_\/-]|$)/i.test(pathname);
+  if (isSearchPath) {
+    return PAGE_CONTEXTS.SEARCH_RESULTS;
+  }
+
+  // Parâmetros de consulta explícitos de busca
+  if (parsed.searchParams) {
+    const hasSearchQueryParam =
+      parsed.searchParams.has('q') ||
+      parsed.searchParams.has('as_word') ||
+      parsed.searchParams.has('search_layout');
+
+    if (hasSearchQueryParam) {
+      return PAGE_CONTEXTS.SEARCH_RESULTS;
+    }
+  }
+
+  // 3. URLs ambíguas ou não suportadas (home, ajuda, conta, etc.) sem evidência
+  return PAGE_CONTEXTS.UNSUPPORTED;
+}
+
+/**
+ * Extrai determinísticamente a quantidade total de resultados a partir do cabeçalho da página de busca (TASK-014).
+ * Converte textos como "1.420 resultados", "500 produtos", "120 resultados" em número inteiro.
+ * 
+ * @param {Document|Element} documentRoot - Raiz do documento ou contêiner de busca.
+ * @returns {number|null} Quantidade total de resultados observada ou null se indisponível.
+ */
+export function extractSearchResultCount(documentRoot) {
+  if (!documentRoot || typeof documentRoot.querySelector !== 'function') {
+    return null;
+  }
+
+  const candidateSelectors = [
+    '.ui-search-search-result__quantity-results',
+    '.ui-search-breadcrumb__title',
+    '.ui-search-results-count',
+  ];
+
+  for (const sel of candidateSelectors) {
+    try {
+      const el = documentRoot.querySelector(sel);
+      if (el) {
+        const text = (el.textContent || '').trim();
+        const match = text.match(/([\d.]+)\s*(?:resultados?|produtos?)/i);
+        if (match) {
+          const numStr = match[1].replace(/\./g, '');
+          const count = parseInt(numStr, 10);
+          if (!isNaN(count) && count >= 0) {
+            return count;
+          }
+        }
+      }
+    } catch {
+      // Ignora e continua
+    }
+  }
+
+  return null;
+}
+
+// =============================================================================
+// SEÇÃO: CÁLCULOS E INDICADORES DISPONIBILIDADE-CONSCIENTES (TASK-013)
+// =============================================================================
+
+/**
+ * Classifica a oportunidade de mercado por semáforo com base no total de resultados da busca.
+ * - GREEN: concorrência baixa / alta oportunidade (<= green_max)
+ * - YELLOW: concorrência moderada (> green_max && <= yellow_max)
+ * - RED: concorrência alta (> yellow_max)
+ * - UNAVAILABLE: total de resultados nulo, indefinido, negativo ou não numérico.
+ * 
+ * @param {number|null|undefined} resultCount - Quantidade total de resultados observada na busca.
+ * @param {object} [config=DEFAULT_CONFIG] - Configuração ativa do ProductRadar.
+ * @returns {{ value: 'GREEN'|'YELLOW'|'RED'|null, source: string, status: string }}
+ */
+export function calculateTrafficLight(resultCount, config = DEFAULT_CONFIG) {
+  if (
+    resultCount === null ||
+    resultCount === undefined ||
+    typeof resultCount !== 'number' ||
+    isNaN(resultCount) ||
+    resultCount < 0
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+      status: TRAFFIC_LIGHT_STATUS.UNAVAILABLE,
+    };
+  }
+
+  const tlConfig = (config && config.trafficLight) || DEFAULT_CONFIG.trafficLight;
+  const greenMax = typeof tlConfig.green_max === 'number' ? tlConfig.green_max : DEFAULT_CONFIG.trafficLight.green_max;
+  const yellowMax = typeof tlConfig.yellow_max === 'number' ? tlConfig.yellow_max : DEFAULT_CONFIG.trafficLight.yellow_max;
+
+  if (resultCount <= greenMax) {
+    return {
+      value: TRAFFIC_LIGHT_STATUS.GREEN,
+      source: DATA_SOURCES.CALCULATED,
+      status: TRAFFIC_LIGHT_STATUS.GREEN,
+    };
+  }
+
+  if (resultCount <= yellowMax) {
+    return {
+      value: TRAFFIC_LIGHT_STATUS.YELLOW,
+      source: DATA_SOURCES.CALCULATED,
+      status: TRAFFIC_LIGHT_STATUS.YELLOW,
+    };
+  }
+
+  return {
+    value: TRAFFIC_LIGHT_STATUS.RED,
+    source: DATA_SOURCES.CALCULATED,
+    status: TRAFFIC_LIGHT_STATUS.RED,
+  };
+}
+
+/**
+ * Calcula a estimativa de imposto sobre o preço do produto utilizando a alíquota configurada.
+ * Parâmetro de simulação do usuário (CALCULATED), NÃO observado do Mercado Livre.
+ * 
+ * @param {number|null|undefined} price - Preço bruto do produto (BRL).
+ * @param {number|null|undefined} [taxRate=DEFAULT_CONFIG.taxRate] - Alíquota de imposto configurada (%).
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateEstimatedTax(price, taxRate = DEFAULT_CONFIG.taxRate) {
+  if (
+    price === null ||
+    price === undefined ||
+    typeof price !== 'number' ||
+    isNaN(price) ||
+    price < 0 ||
+    taxRate === null ||
+    taxRate === undefined ||
+    typeof taxRate !== 'number' ||
+    isNaN(taxRate) ||
+    taxRate < 0
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const tax = (price * taxRate) / 100;
+  return {
+    value: tax,
+    source: DATA_SOURCES.CALCULATED,
+  };
+}
+
+/**
+ * Calcula o valor líquido a receber pelo vendedor:
+ * Fórmula: preço - comissão ML - imposto estimado - frete
+ * IMPORTANTE: O valor a receber NÃO representa lucro líquido, pois custos de fornecedor
+ * e aquisição de estoque não estão disponíveis.
+ * 
+ * @param {object} params - Parâmetros monetários de entrada.
+ * @param {number} params.price - Preço de venda atual do produto.
+ * @param {number} params.commission - Comissão/taxa retida pelo Mercado Livre.
+ * @param {number} params.tax - Imposto estimado calculado.
+ * @param {number} params.freight - Custo de frete/envio arcado pelo vendedor.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateReceiveNet(params) {
+  if (!params || typeof params !== 'object') {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const { price, commission, tax, freight } = params;
+
+  const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && val >= 0;
+
+  if (!isValidNumber(price) || !isValidNumber(commission) || !isValidNumber(tax) || !isValidNumber(freight)) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const receiveNet = price - commission - tax - freight;
+  return {
+    value: receiveNet,
+    source: DATA_SOURCES.CALCULATED,
+  };
+}
+
+/**
+ * Calcula a margem líquida percentual ou retorna UNAVAILABLE se o custo de fornecedor estiver ausente.
+ * 
+ * @param {number|null|undefined} receiveNet - Valor líquido a receber.
+ * @param {number|null|undefined} supplierCost - Custo unitário de aquisição junto ao fornecedor.
+ * @param {number|null|undefined} price - Preço bruto de venda do produto.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateNetMargin(receiveNet, supplierCost, price) {
+  const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && val >= 0;
+
+  if (!isValidNumber(receiveNet) || !isValidNumber(supplierCost) || !isValidNumber(price) || price === 0) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const profit = receiveNet - supplierCost;
+  const marginPercent = (profit / price) * 100;
+
+  return {
+    value: marginPercent,
+    source: DATA_SOURCES.CALCULATED,
+  };
+}
+
+/**
+ * Calcula a taxa de conversão observada: (vendas / visitas) * 100.
+ * Retorna UNAVAILABLE se visitas for ausente, zero ou inválido.
+ * 
+ * @param {number|null|undefined} sales - Quantidade de vendas legítimas observadas.
+ * @param {number|null|undefined} visits - Quantidade de visitas legítimas observadas.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateConversionRate(sales, visits) {
+  if (
+    sales === null ||
+    sales === undefined ||
+    typeof sales !== 'number' ||
+    isNaN(sales) ||
+    sales < 0 ||
+    visits === null ||
+    visits === undefined ||
+    typeof visits !== 'number' ||
+    isNaN(visits) ||
+    visits <= 0
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const rate = (sales / visits) * 100;
+  return {
+    value: rate,
+    source: DATA_SOURCES.CALCULATED,
+  };
+}
+
+/**
+ * Calcula a estimativa de vendas por dia (soldQuantity / dias decorridos).
+ * Requer soldQuantity e uma data legítima de criação do anúncio.
+ * Marcado explicitamente como ESTIMATED.
+ * 
+ * @param {number|null|undefined} soldQuantity - Quantidade vendida observada.
+ * @param {Date|string|number|null|undefined} creationDate - Data de criação do anúncio.
+ * @param {Date} [currentDate=new Date()] - Data atual de referência para cálculo de dias decorridos.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateSalesPerDay(soldQuantity, creationDate, currentDate = new Date()) {
+  if (
+    soldQuantity === null ||
+    soldQuantity === undefined ||
+    typeof soldQuantity !== 'number' ||
+    isNaN(soldQuantity) ||
+    soldQuantity < 0 ||
+    !creationDate
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const created = creationDate instanceof Date ? creationDate : new Date(creationDate);
+  const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+
+  if (isNaN(created.getTime()) || isNaN(now.getTime()) || created.getTime() > now.getTime()) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  // Evita divisão por zero para anúncios criados no mesmo dia (mínimo de 1 dia para base de taxa)
+  const elapsedDays = Math.max(1, diffDays);
+
+  const salesPerDay = soldQuantity / elapsedDays;
+
+  return {
+    value: salesPerDay,
+    source: DATA_SOURCES.ESTIMATED,
+  };
+}

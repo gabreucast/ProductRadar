@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProductRadar - Configurações</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 16px;
+      width: 360px;
+      color: #1f2937;
+      background-color: #f9fafb;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .brand-icon {
+      font-size: 18px;
+    }
+    h1 {
+      font-size: 16px;
+      margin: 0;
+      font-weight: 700;
+      color: #111827;
+    }
+    .badge {
+      font-size: 10px;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .section {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #4b5563;
+      font-size: 12px;
+    }
+    input[type="number"] {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #111827;
+      background: #fff;
+    }
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    .threshold-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .info-box {
+      font-size: 11px;
+      color: #6b7280;
+      background: #f9fafb;
+      border-left: 3px solid #3b82f6;
+      padding: 8px;
+      border-radius: 0 4px 4px 0;
+      margin-top: 8px;
+      line-height: 1.35;
+    }
+    .legend {
+      font-size: 11px;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .checkbox-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      font-size: 12px;
+      color: #374151;
+    }
+    .checkbox-label input[type="checkbox"] {
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    button {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background-color 0.15s ease;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #1d4ed8;
+    }
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #4b5563;
+      border-color: #d1d5db;
+    }
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+    #status-msg {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+    .status-success {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+    }
+    .status-error {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="brand-icon">📡</span>
+      <h1>ProductRadar</h1>
+    </div>
+    <span class="badge">v0.1.0</span>
+  </header>
+
+  <!-- 1. Limites do Semáforo -->
+  <div class="section">
+    <div class="section-title">
+      <span>🚦</span> Semáforo de Resultados de Busca
+    </div>
+    <div class="threshold-grid">
+      <div class="form-group">
+        <label for="green_max">Máximo Verde:</label>
+        <input type="number" id="green_max" min="1" step="1" required>
+      </div>
+      <div class="form-group">
+        <label for="yellow_max">Máximo Amarelo:</label>
+        <input type="number" id="yellow_max" min="1" step="1" required>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-item" style="color: #059669;">● <strong>Verde:</strong> até <span id="lbl-green">100</span> resultados (baixa concorrência)</div>
+      <div class="legend-item" style="color: #d97706;">● <strong>Amarelo:</strong> de <span id="lbl-green-next">101</span> até <span id="lbl-yellow">500</span> resultados (atenção)</div>
+      <div class="legend-item" style="color: #dc2626;">● <strong>Vermelho:</strong> acima de <span id="lbl-yellow-next">500</span> resultados (alta concorrência)</div>
+    </div>
+    <div class="info-box">
+      ℹ️ <strong>Importante:</strong> O semáforo é exclusivamente uma métrica de triagem de volume de resultados. <em>NÃO representa qualidade do produto, lucratividade ou oportunidade garantida.</em>
+    </div>
+  </div>
+
+  <!-- 2. Taxa de Imposto Estimada -->
+  <div class="section">
+    <div class="section-title">
+      <span>🏷️</span> Taxa de Imposto Estimada
+    </div>
+    <div class="form-group">
+      <label for="tax_rate">Alíquota de Simulação (%):</label>
+      <input type="number" id="tax_rate" min="0" max="100" step="0.1" required>
+    </div>
+    <div class="info-box">
+      ℹ️ <strong>Simulação do Usuário:</strong> Parâmetro manual para estimativa de dedução tributária. <em>NÃO é um dado observado do Mercado Livre.</em>
+    </div>
+  </div>
+
+  <!-- 3. Visibilidade na Busca -->
+  <div class="section">
+    <div class="section-title">
+      <span>🔍</span> Indicadores na Página de Busca
+    </div>
+    <div class="checkbox-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_search_trafficLight">
+        <span>Semáforo de resultados</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_search_sales">
+        <span>Vendas estimadas</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_search_revenue">
+        <span>Faturamento estimado</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_search_stock">
+        <span>Estoque disponível</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 4. Visibilidade no Produto -->
+  <div class="section">
+    <div class="section-title">
+      <span>📦</span> Indicadores na Página de Produto
+    </div>
+    <div class="checkbox-group">
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_product_sales">
+        <span>Vendas declaradas (+X vendidos)</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_product_taxRate">
+        <span>Imposto estimado calculado</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_product_revenue">
+        <span>Faturamento estimado</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_product_netMargin">
+        <span>Margem líquida</span>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="vis_product_trafficLight">
+        <span>Semáforo de concorrência</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Botões de Ação -->
+  <div class="actions">
+    <button type="button" id="reset-btn" class="btn-secondary">Restaurar Padrões</button>
+    <button type="button" id="save-btn" class="btn-primary">Salvar Alterações</button>
+  </div>
+
+  <div id="status-msg"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
