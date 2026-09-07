@@ -128,26 +128,38 @@ export function extractCanonicalProductId(url) {
           return innerId;
         }
       } catch {
-        // Ignora e continua para o pathname
+        // Ignora e continua para os parâmetros do item / pathname
+      }
+    }
+
+    // 2. Tentar encontrar identificador MLB explícito em query parameters (ex: item_id, wid, itemId, pdp_id)
+    const itemParamKeys = ['item_id', 'wid', 'itemId', 'pdp_id', 'item', 'product_id'];
+    for (const key of itemParamKeys) {
+      const paramVal = parsed.searchParams.get(key);
+      if (paramVal) {
+        const normalized = normalizeProductId(paramVal);
+        if (normalized) {
+          return normalized;
+        }
       }
     }
   }
 
   const pathname = parsed.pathname;
 
-  // 2. Tentar correspondência com URL de catálogo (/p/MLB...)
+  // 3. Tentar correspondência com URL de catálogo (/p/MLB...)
   const catalogMatch = PRODUCT_PATTERNS.CATALOG_URL_PATH.exec(pathname);
   if (catalogMatch && catalogMatch[1]) {
     return normalizeProductId(catalogMatch[1]);
   }
 
-  // 3. Tentar correspondência com URL de anúncio direto (/MLB-...)
+  // 4. Tentar correspondência com URL de anúncio direto (/MLB-...)
   const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
   if (standardMatch && standardMatch[1]) {
     return normalizeProductId(standardMatch[1]);
   }
 
-  // 4. Correspondência robusta de qualquer segmento contendo MLB + dígitos no pathname
+  // 5. Correspondência robusta de qualquer segmento contendo MLB + dígitos no pathname
   const generalMatch = /(?:^|\/)(MLB-?\d{6,14})(?:[_\/-]|$)/i.exec(pathname);
   if (generalMatch && generalMatch[1]) {
     return normalizeProductId(generalMatch[1]);
@@ -168,7 +180,7 @@ export function extractProductIdentity(url) {
     return null;
   }
 
-  // Se a URL for um redirecionamento ou anúncio patrocinado com URL interna encapsulada
+  // 1. Se a URL for um redirecionamento ou anúncio patrocinado com URL interna encapsulada
   if (parsed.searchParams) {
     const targetUrlParam = parsed.searchParams.get('url') ||
       parsed.searchParams.get('item_url') ||
@@ -189,42 +201,19 @@ export function extractProductIdentity(url) {
     }
   }
 
+  const id = extractCanonicalProductId(parsed);
+  if (!id) {
+    return null;
+  }
+
   const pathname = parsed.pathname;
+  const isCatalog = PRODUCT_PATTERNS.CATALOG_URL_PATH.test(pathname) ||
+    (PRODUCT_PATTERNS.UP_CATALOG_URL_PATH && PRODUCT_PATTERNS.UP_CATALOG_URL_PATH.test(pathname));
 
-  const catalogMatch = PRODUCT_PATTERNS.CATALOG_URL_PATH.exec(pathname);
-  if (catalogMatch && catalogMatch[1]) {
-    const id = normalizeProductId(catalogMatch[1]);
-    if (id) {
-      return {
-        id,
-        type: PRODUCT_ID_TYPES.CATALOG,
-      };
-    }
-  }
-
-  const standardMatch = PRODUCT_PATTERNS.STANDARD_URL_PATH.exec(pathname);
-  if (standardMatch && standardMatch[1]) {
-    const id = normalizeProductId(standardMatch[1]);
-    if (id) {
-      return {
-        id,
-        type: PRODUCT_ID_TYPES.STANDARD,
-      };
-    }
-  }
-
-  const generalMatch = /(?:^|\/)(MLB-?\d{6,14})(?:[_\/-]|$)/i.exec(pathname);
-  if (generalMatch && generalMatch[1]) {
-    const id = normalizeProductId(generalMatch[1]);
-    if (id) {
-      return {
-        id,
-        type: PRODUCT_ID_TYPES.STANDARD,
-      };
-    }
-  }
-
-  return null;
+  return {
+    id,
+    type: isCatalog ? PRODUCT_ID_TYPES.CATALOG : PRODUCT_ID_TYPES.STANDARD,
+  };
 }
 
 /**

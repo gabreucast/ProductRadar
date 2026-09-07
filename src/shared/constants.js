@@ -27,6 +27,8 @@ export const PRODUCT_PATTERNS = Object.freeze({
   CATALOG_URL_PATH: /(?:^|\/)p\/(MLB-?\d{6,14})(?:[_\/-]|$)/i,
   // Rota de Anúncio Padrão: /MLB-... ou /(item|produto)/MLB-...
   STANDARD_URL_PATH: /^\/(?:(?:item|produto)\/)?(MLB-?\d{6,14})(?:[_\/-]|$)/i,
+  // Rota de Catálogo UP: /up/MLBU...
+  UP_CATALOG_URL_PATH: /(?:^|\/)up\/(MLBU-?\d{6,14})(?:[_\/-]|$)/i,
 });
 
 // Chaves estáveis para persistência em chrome.storage.local
