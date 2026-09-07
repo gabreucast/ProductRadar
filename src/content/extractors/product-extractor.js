@@ -308,14 +308,33 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
-  // 6. Vendedor / Marca
+  // 6. Vendedor / Informações do Vendedor (TASK-007 / TASK-030)
   let sellerName = null;
+  let sellerSales = null;
+  let sellerLocation = null;
+
   const sellerEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER);
   if (sellerEl) {
     const rawSeller = (sellerEl.textContent || '').trim();
     const cleaned = rawSeller.replace(/^(?:vendido\s+por|por)\s+/i, '').trim();
     if (cleaned) {
       sellerName = cleaned;
+    }
+  }
+
+  const sellerSalesEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_SALES);
+  if (sellerSalesEl) {
+    const rawSales = (sellerSalesEl.textContent || '').trim();
+    if (rawSales) {
+      sellerSales = rawSales;
+    }
+  }
+
+  const sellerLocationEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SELLER_LOCATION);
+  if (sellerLocationEl) {
+    const rawLoc = (sellerLocationEl.textContent || '').trim();
+    if (rawLoc) {
+      sellerLocation = rawLoc;
     }
   }
 
@@ -343,7 +362,29 @@ export function extractProductPageData(documentRoot) {
     }
   }
 
-  // 8. Data de Criação do Anúncio (TASK-028)
+  // 8. Catálogo (TASK-030)
+  const isCatalog = type === 'CATALOG' || !!queryFirst(documentRoot, SELECTORS.PRODUCT.CATALOG);
+
+  // 9. Visitas e Comissão ML (TASK-030 - caso legitimamente expostos no DOM)
+  let visits = null;
+  const visitsEl = queryFirst(documentRoot, SELECTORS.PRODUCT.VISITS);
+  if (visitsEl) {
+    const vMatch = (visitsEl.textContent || '').match(/([\d.,]+)/);
+    if (vMatch) {
+      const vParsed = parseInt(vMatch[1].replace(/\D/g, ''), 10);
+      if (!isNaN(vParsed) && vParsed > 0) {
+        visits = vParsed;
+      }
+    }
+  }
+
+  let commission = null;
+  const commissionEl = queryFirst(documentRoot, SELECTORS.PRODUCT.COMMISSION);
+  if (commissionEl) {
+    commission = parseMonetaryValue(commissionEl);
+  }
+
+  // 10. Data de Criação do Anúncio (TASK-028)
   // Observa atributos explícitos, metadados ou subtítulos caso legitimamente expostos pelo DOM
   let creationDate = null;
   if (typeof documentRoot.getAttribute === 'function' && documentRoot.getAttribute('data-creation-date')) {
@@ -351,13 +392,13 @@ export function extractProductPageData(documentRoot) {
   }
 
   if (!creationDate && typeof documentRoot.querySelector === 'function') {
-    // 8.1 Meta tags de criação
+    // 10.1 Meta tags de criação
     const metaEl = documentRoot.querySelector('meta[property="product:creation_date"], meta[name="creation_date"], meta[itemprop="dateCreated"]');
     if (metaEl && metaEl.content) {
       creationDate = parseCreationDateText(metaEl.content);
     }
 
-    // 8.2 Subtítulo, cabeçalho e elementos de características do anúncio
+    // 10.2 Subtítulo, cabeçalho e elementos de características do anúncio
     if (!creationDate) {
       const candidateElements = documentRoot.querySelectorAll('.ui-pdp-subtitle, .ui-pdp-header__subtitle, .ui-pdp-promotions-pill-label, .ui-pdp-description, [class*="creation" i], [class*="created" i]');
       for (const el of candidateElements) {
@@ -374,6 +415,7 @@ export function extractProductPageData(documentRoot) {
   return {
     id,
     type,
+    isCatalog,
     url: cleanUrl,
     title,
     price: {
@@ -385,8 +427,12 @@ export function extractProductPageData(documentRoot) {
     soldQuantity,
     availableStock,
     creationDate,
+    visits,
+    commission,
     seller: {
       name: sellerName,
+      sales: sellerSales,
+      location: sellerLocation,
     },
     shipping: {
       isFree,

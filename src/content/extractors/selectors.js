@@ -156,10 +156,40 @@ export const SELECTORS = Object.freeze({
     SELLER: Object.freeze([
       '.ui-pdp-seller__link-trigger',
       '.ui-seller-data',
+      '.ui-pdp-seller-header__title',
+      'a.ui-pdp-action-modal__link',
+    ]),
+    SELLER_SALES: Object.freeze([
+      '.ui-seller-info__status-info',
+      '.ui-pdp-seller__reputation-info',
+      'p.ui-seller-info__status-info',
+      '[class*="seller-info" i] [class*="sales" i]',
+      '[class*="seller-info" i] [class*="status" i]',
+    ]),
+    SELLER_LOCATION: Object.freeze([
+      '.ui-seller-info__status-info-location',
+      '[class*="seller-info" i] [class*="location" i]',
+      '.ui-pdp-seller__reputation-info-location',
     ]),
     SHIPPING: Object.freeze([
       '.ui-pdp-media--shipping',
       '.ui-pdp-shipping',
+      '.ui-pdp-shipping-cost',
+    ]),
+    CATALOG: Object.freeze([
+      '.ui-pdp-catalog-badge',
+      '[class*="catalog-badge" i]',
+      '[class*="is-catalog" i]',
+      '.ui-pdp-badge--catalog',
+    ]),
+    VISITS: Object.freeze([
+      '.ui-pdp-visits',
+      '[class*="visits-count" i]',
+      '[class*="ui-pdp-visits" i]',
+    ]),
+    COMMISSION: Object.freeze([
+      '.ui-pdp-commission',
+      '[class*="commission-fee" i]',
     ]),
   }),
 });

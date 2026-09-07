@@ -10,6 +10,12 @@ import {
   extractSearchResultCount,
   calculateEstimatedTax,
   calculateSalesPerDay,
+  calculateRevenue,
+  calculateMonthlyVelocity,
+  calculateElapsedDays,
+  calculateConversionRate,
+  calculateReceiveNet,
+  formatDateBR,
   extractCanonicalProductId,
   parseMonetaryInput,
 } from '../shared/utils.js';
@@ -296,40 +302,143 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   const prodVis = (config && config.visibility && config.visibility.product) || DEFAULT_CONFIG.visibility.product;
   const taxRate = typeof config.taxRate === 'number' ? config.taxRate : DEFAULT_CONFIG.taxRate;
 
-  // 1. Dados Observados na Página (PDP)
+  // Fallback padrão exato para valores não disponíveis (TASK-030)
+  const notFoundHtml = '<span style="color: #9ca3af; font-style: italic;">Não encontrado</span>';
+
+  // 1. Dados Observados na Página (PDP Overview)
   const pdpTitle = productData && productData.title ? productData.title : 'Produto sem título identificado';
   const pdpPrice = productData && productData.price && productData.price.current !== null
     ? `R$ ${productData.price.current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-    : 'Não informado';
-  const pdpStock = productData && productData.availableStock !== null
-    ? `${productData.availableStock} unidades`
-    : 'Não informado';
-  const pdpSeller = productData && productData.seller && productData.seller.name
-    ? productData.seller.name
-    : 'Não identificado';
-  const pdpShipping = productData && productData.shipping && productData.shipping.isFree
-    ? (productData.shipping.isFull ? 'Frete Grátis (Full)' : 'Frete Grátis')
-    : (productData && productData.shipping && productData.shipping.isFull ? 'Envio Full' : 'Padrão');
+    : null;
+  const pdpPriceDisplay = pdpPrice
+    ? `<strong style="color: #059669;">${pdpPrice}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`
+    : notFoundHtml;
 
+  // Frete
+  let shippingDisplay = notFoundHtml;
+  if (productData && productData.shipping) {
+    if (productData.shipping.isFree && productData.shipping.isFull) {
+      shippingDisplay = '<strong style="color: #111827;">Frete Grátis (Full)</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    } else if (productData.shipping.isFree) {
+      shippingDisplay = '<strong style="color: #111827;">Frete Grátis</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    } else if (productData.shipping.isFull) {
+      shippingDisplay = '<strong style="color: #111827;">Envio Full</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    } else {
+      shippingDisplay = '<strong style="color: #111827;">Padrão</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    }
+  }
+
+  // Catálogo
+  let catalogDisplay = notFoundHtml;
+  if (productData) {
+    if (productData.isCatalog) {
+      catalogDisplay = '<strong style="color: #111827;">Sim (Anúncio de Catálogo)</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    } else {
+      catalogDisplay = '<strong style="color: #111827;">Não (Anúncio Padrão)</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>';
+    }
+  }
+
+  // Vendas declaradas
+  let salesDeclaredDisplay = notFoundHtml;
+  if (productData && typeof productData.soldQuantity === 'number') {
+    salesDeclaredDisplay = `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+  }
+
+  // Estoque
+  let stockDisplay = notFoundHtml;
+  if (productData && typeof productData.availableStock === 'number') {
+    stockDisplay = `<strong style="color: #111827;">${productData.availableStock} unidades</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+  }
+
+  // Anúncio criado em & Criado há
+  let creationDateDisplay = notFoundHtml;
+  let createdAgoDisplay = notFoundHtml;
+  const creationDate = productData && productData.creationDate ? productData.creationDate : null;
+  if (creationDate) {
+    const formattedDate = formatDateBR(creationDate);
+    if (formattedDate) {
+      creationDateDisplay = `<strong style="color: #111827;">${formattedDate}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+    }
+    const elapsedDays = calculateElapsedDays(creationDate);
+    if (elapsedDays !== null) {
+      createdAgoDisplay = `<strong style="color: #111827;">${elapsedDays} dias</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[CALCULADO]</span>`;
+    }
+  }
+
+  // Bloco de Informações do Anúncio (Overview)
   const pdpDetailsHtml = `
     <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Dados Observados na Página</span>
         <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO NO ANÚNCIO]</span>
       </div>
-      <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 6px; line-height: 1.3;" title="${pdpTitle}">
+      <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 8px; line-height: 1.3;" title="${pdpTitle}">
         ${pdpTitle}
       </div>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px;">
-        <div><span style="color: #6b7280;">Preço PDP:</span> <strong style="color: #059669;">${pdpPrice}</strong></div>
-        <div><span style="color: #6b7280;">Estoque:</span> <strong>${pdpStock}</strong></div>
-        <div><span style="color: #6b7280;">Vendedor:</span> <strong>${pdpSeller}</strong></div>
-        <div><span style="color: #6b7280;">Envio:</span> <strong>${pdpShipping}</strong></div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Preço PDP:</span> <div>${pdpPriceDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Frete:</span> <div>${shippingDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Catálogo:</span> <div>${catalogDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Estoque:</span> <div>${stockDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Vendas declaradas:</span> <div>${salesDeclaredDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+          <span style="color: #6b7280;">Anúncio criado em:</span> <div>${creationDateDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
+          <span style="color: #6b7280;">Criado há:</span> <div>${createdAgoDisplay}</div>
+        </div>
       </div>
     </div>
   `;
 
-  // 2. Custo do Fornecedor (Entrada manual do Usuário / TASK-029)
+  // 2. Informações do Vendedor (TASK-030)
+  let sellerNameDisplay = notFoundHtml;
+  let sellerSalesDisplay = notFoundHtml;
+  let sellerLocationDisplay = notFoundHtml;
+
+  if (productData && productData.seller) {
+    if (productData.seller.name) {
+      sellerNameDisplay = `<strong style="color: #111827;">${productData.seller.name}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+    }
+    if (productData.seller.sales) {
+      sellerSalesDisplay = `<strong style="color: #111827;">${productData.seller.sales}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+    }
+    if (productData.seller.location) {
+      sellerLocationDisplay = `<strong style="color: #111827;">${productData.seller.location}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+    }
+  }
+
+  const sellerDetailsHtml = `
+    <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-size: 11px; font-weight: 700; color: #86198f; text-transform: uppercase;">Informações do Vendedor</span>
+        <span style="font-size: 10px; background: #fae8ff; color: #a21caf; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO]</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
+          <span style="color: #6b7280;">Vendedor:</span> <div>${sellerNameDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
+          <span style="color: #6b7280;">Vendas do vendedor:</span> <div>${sellerSalesDisplay}</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
+          <span style="color: #6b7280;">Localização do vendedor:</span> <div>${sellerLocationDisplay}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 3. Custo do Fornecedor (Entrada manual do Usuário / TASK-029)
   const canonicalId = (productData && productData.id) || null;
   const initialCostValue = (typeof supplierCost === 'number' && supplierCost >= 0)
     ? supplierCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -371,14 +480,14 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
           <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Custo do Fornecedor</span>
-          <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">[INDISPONÍVEL]</span>
+          <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">Não encontrado</span>
         </div>
         ℹ️ <em>ID do produto não identificado. Custo do fornecedor indisponível.</em>
       </div>
     `;
   }
 
-  // 3. Contexto Herdado da Busca (Search Context)
+  // 4. Contexto Herdado da Busca (Search Context)
   let searchContextHtml = '';
   if (searchContext) {
     const sPrice = searchContext.price && searchContext.price.current !== null
@@ -410,125 +519,177 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   } else {
     searchContextHtml = `
       <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
-        ℹ️ <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior) <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">[INDISPONÍVEL]</span>.</em>
+        ℹ️ <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior) <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">Não encontrado</span>.</em>
       </div>
     `;
   }
 
-  // 4. Indicadores de Produto (Controlados por visibility.product com Semântica Estrita TASK-020)
+  // 5. Inteligência e Indicadores do Produto (TASK-030)
   const indicatorRows = [];
 
-  // Vendas (Observadas no PDP)
-  if (prodVis.sales) {
-    const salesText = productData && productData.soldQuantity !== null
-      ? `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`
-      : `<span style="color: #9ca3af; font-style: italic;">Indisponível na página</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>`;
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Vendas declaradas:</span>
-        <div>${salesText}</div>
-      </div>
-    `);
-
-    // Vendas por dia (Estimativa de Velocidade / TASK-028)
-    const effectiveSold = (productData && typeof productData.soldQuantity === 'number')
-      ? productData.soldQuantity
-      : (searchContext && typeof searchContext.soldQuantity === 'number' ? searchContext.soldQuantity : null);
-    const creationDate = productData && productData.creationDate ? productData.creationDate : null;
-    const spdCalc = calculateSalesPerDay(effectiveSold, creationDate);
-
-    let spdContent = '';
-    if (spdCalc.value !== null) {
-      spdContent = `
-        <div style="text-align: right;">
-          <strong style="color: #111827;">${spdCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / dia</strong>
-          <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>
-        </div>
-      `;
-    } else {
-      spdContent = `
-        <div style="text-align: right;">
-          <span style="color: #9ca3af; font-style: italic;">Indisponível (sem data de criação)</span>
-          <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>
-        </div>
-      `;
+  // Faturando (Vendas declaradas × preço)
+  const priceNum = productData && productData.price && typeof productData.price.current === 'number' ? productData.price.current : null;
+  const soldNum = productData && typeof productData.soldQuantity === 'number' ? productData.soldQuantity : null;
+  let revenueDisplay = notFoundHtml;
+  if (soldNum !== null && priceNum !== null) {
+    const revCalc = calculateRevenue(soldNum, priceNum);
+    if (revCalc.value !== null) {
+      revenueDisplay = `<strong style="color: #111827;">R$ ${revCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>`;
     }
-
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Vendas por dia:</span>
-        <div>${spdContent}</div>
-      </div>
-      <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-        ℹ️ <em>Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.</em>
-      </div>
-    `);
   }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Faturando:</span>
+      <div>${revenueDisplay}</div>
+    </div>
+    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
+      ℹ️ <em>Faturamento bruto estimado (vendas declaradas × preço unitário). NÃO representa lucro líquido.</em>
+    </div>
+  `);
 
-  // Imposto Estimado (Simulação do Usuário)
-  if (prodVis.taxRate) {
-    let taxContent = `<span style="color: #9ca3af; font-style: italic;">Indisponível (preço ausente)</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span>`;
-    if (productData && productData.price && typeof productData.price.current === 'number') {
-      const taxCalc = calculateEstimatedTax(productData.price.current, taxRate);
-      if (taxCalc.value !== null) {
-        taxContent = `
-          <div style="text-align: right;">
-            <strong style="color: #111827;">R$ ${taxCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-            <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[SIMULAÇÃO / CALCULADO]</span>
-          </div>
-        `;
-      }
+  // Vendas por dia & Velocidades
+  const effectiveSold = (productData && typeof productData.soldQuantity === 'number')
+    ? productData.soldQuantity
+    : (searchContext && typeof searchContext.soldQuantity === 'number' ? searchContext.soldQuantity : null);
+  const spdCalc = calculateSalesPerDay(effectiveSold, creationDate);
+
+  let spdDisplay = notFoundHtml;
+  let monthlySalesDisplay = notFoundHtml;
+  let currentPaceDisplay = notFoundHtml;
+
+  if (spdCalc.value !== null) {
+    spdDisplay = `<strong style="color: #111827;">${spdCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / dia</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>`;
+    const monthlyVelocity = calculateMonthlyVelocity(spdCalc.value);
+    if (monthlyVelocity.value !== null) {
+      monthlySalesDisplay = `<strong style="color: #111827;">~${Math.round(monthlyVelocity.value).toLocaleString('pt-BR')} / mês</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>`;
+      currentPaceDisplay = `<strong style="color: #111827;">~${Math.round(monthlyVelocity.value).toLocaleString('pt-BR')} / mês</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[ESTIMADO / CALCULADO]</span>`;
     }
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Imposto estimado:</span>
-        <div>${taxContent}</div>
-      </div>
-      <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-        ℹ️ <em>Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.</em>
-      </div>
-    `);
   }
 
-  // Faturamento (Indisponível no MVP)
-  if (prodVis.revenue) {
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Faturamento:</span>
-        <div><span style="color: #9ca3af; font-style: italic;">Indisponível</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
-      </div>
-    `);
-  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Vendas por dia:</span>
+      <div>${spdDisplay}</div>
+    </div>
+    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
+      ℹ️ <em>Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.</em>
+    </div>
+  `);
 
-  // Margem Líquida (Indisponível sem custo de fornecedor)
-  if (prodVis.netMargin) {
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Margem líquida:</span>
-        <div><span style="color: #9ca3af; font-style: italic;">Indisponível (requer custo fornecedor)</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
-      </div>
-    `);
-  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Vendas mensais:</span>
+      <div>${monthlySalesDisplay}</div>
+    </div>
+  `);
 
-  // Semáforo (Métrica exclusiva de busca)
-  if (prodVis.trafficLight) {
-    indicatorRows.push(`
-      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-        <span style="color: #4b5563;">Semáforo:</span>
-        <div><span style="color: #9ca3af; font-style: italic;">Indisponível no produto individual</span> <span style="font-size: 10px; color: #6b7280; font-weight: 600; background: #f3f4f6; padding: 1px 6px; border-radius: 4px;">[INDISPONÍVEL]</span></div>
-      </div>
-    `);
-  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Ritmo atual (vendas/mês):</span>
+      <div>${currentPaceDisplay}</div>
+    </div>
+  `);
 
-  let indicatorsHtml = '';
-  if (indicatorRows.length > 0) {
-    indicatorsHtml = `
-      <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
-        <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 6px;">Indicadores do Produto</div>
-        ${indicatorRows.join('')}
-      </div>
-    `;
+  // Vendas estimadas
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Vendas estimadas:</span>
+      <div>${notFoundHtml}</div>
+    </div>
+  `);
+
+  // Visitas
+  let visitsDisplay = notFoundHtml;
+  if (productData && typeof productData.visits === 'number') {
+    visitsDisplay = `<strong style="color: #111827;">${productData.visits.toLocaleString('pt-BR')}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
   }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Visitas:</span>
+      <div>${visitsDisplay}</div>
+    </div>
+  `);
+
+  // Conversão
+  let conversionDisplay = notFoundHtml;
+  if (productData && typeof productData.soldQuantity === 'number' && typeof productData.visits === 'number' && productData.visits > 0) {
+    const convCalc = calculateConversionRate(productData.soldQuantity, productData.visits);
+    if (convCalc.value !== null) {
+      conversionDisplay = `<strong style="color: #111827;">${convCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[CALCULADO]</span>`;
+    }
+  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Conversão:</span>
+      <div>${conversionDisplay}</div>
+    </div>
+  `);
+
+  // Imposto (Simulação do Usuário)
+  let taxDisplay = notFoundHtml;
+  if (priceNum !== null) {
+    const taxCalc = calculateEstimatedTax(priceNum, taxRate);
+    if (taxCalc.value !== null) {
+      taxDisplay = `<strong style="color: #111827;">R$ ${taxCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[SIMULAÇÃO / CALCULADO]</span>`;
+    }
+  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Imposto:</span>
+      <div>${taxDisplay}</div>
+    </div>
+    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
+      ℹ️ <em>Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.</em>
+    </div>
+  `);
+
+  // Comissão ML
+  let commissionDisplay = notFoundHtml;
+  if (productData && typeof productData.commission === 'number') {
+    commissionDisplay = `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> <span style="font-size: 10px; color: #059669; font-weight: 700; background: #ecfdf5; padding: 1px 6px; border-radius: 4px;">[OBSERVADO]</span>`;
+  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Comissão ML:</span>
+      <div>${commissionDisplay}</div>
+    </div>
+  `);
+
+  // Recebe
+  let receiveDisplay = notFoundHtml;
+  if (priceNum !== null && productData && typeof productData.commission === 'number') {
+    const taxVal = (priceNum * taxRate) / 100;
+    const recCalc = calculateReceiveNet({
+      price: priceNum,
+      commission: productData.commission,
+      tax: taxVal,
+      freight: 0,
+    });
+    if (recCalc.value !== null) {
+      receiveDisplay = `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> <span style="font-size: 10px; color: #2563eb; font-weight: 700; background: #eff6ff; padding: 1px 6px; border-radius: 4px;">[CALCULADO]</span>`;
+    }
+  }
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Recebe:</span>
+      <div>${receiveDisplay}</div>
+    </div>
+  `);
+
+  // Recomendação
+  indicatorRows.push(`
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
+      <span style="color: #4b5563;">Recomendação:</span>
+      <div>${notFoundHtml}</div>
+    </div>
+  `);
+
+  const indicatorsHtml = `
+    <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
+      <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 6px;">Indicadores de Inteligência do Produto</div>
+      ${indicatorRows.join('')}
+    </div>
+  `;
 
   overlayEl.innerHTML = `
     <div style="
@@ -560,8 +721,9 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       </div>
 
       <!-- Conteúdo do Painel -->
-      <div id="productradar-pdp-content-panel" style="padding: 12px; max-height: 480px; overflow-y: auto;">
+      <div id="productradar-pdp-content-panel" style="padding: 12px; max-height: 520px; overflow-y: auto;">
         ${pdpDetailsHtml}
+        ${sellerDetailsHtml}
         ${supplierCostHtml}
         ${searchContextHtml}
         ${indicatorsHtml}

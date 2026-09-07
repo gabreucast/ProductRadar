@@ -741,3 +741,101 @@ export function parseMonetaryInput(input) {
 
   return Number(val.toFixed(2));
 }
+
+/**
+ * Calcula a quantidade de dias decorridos desde a data de criação até a data de referência (TASK-030).
+ * Retorna número inteiro de dias (>= 0) ou null se data inválida/futura/ausente.
+ *
+ * @param {Date|string|number|null|undefined} creationDate - Data de criação do anúncio.
+ * @param {Date} [currentDate=new Date()] - Data de referência.
+ * @returns {number|null} Dias decorridos ou null.
+ */
+export function calculateElapsedDays(creationDate, currentDate = new Date()) {
+  if (!creationDate) return null;
+  const created = creationDate instanceof Date ? creationDate : new Date(creationDate);
+  const now = currentDate instanceof Date ? currentDate : new Date(currentDate);
+
+  if (isNaN(created.getTime()) || isNaN(now.getTime()) || created.getTime() > now.getTime()) {
+    return null;
+  }
+
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  return Math.max(0, diffDays);
+}
+
+/**
+ * Calcula o faturamento estimado bruto (vendas declaradas × preço unitário atual) (TASK-030).
+ * Não representa lucro líquido.
+ *
+ * @param {number|null|undefined} soldQuantity - Quantidade vendida observada.
+ * @param {number|null|undefined} price - Preço unitário atual.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateRevenue(soldQuantity, price) {
+  if (
+    soldQuantity === null ||
+    soldQuantity === undefined ||
+    typeof soldQuantity !== 'number' ||
+    isNaN(soldQuantity) ||
+    soldQuantity < 0 ||
+    price === null ||
+    price === undefined ||
+    typeof price !== 'number' ||
+    isNaN(price) ||
+    price < 0
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  return {
+    value: soldQuantity * price,
+    source: DATA_SOURCES.CALCULATED,
+  };
+}
+
+/**
+ * Calcula a velocidade mensal estimada de vendas (vendas por dia × 30) (TASK-030).
+ *
+ * @param {number|null|undefined} salesPerDay - Vendas por dia estimadas.
+ * @returns {{ value: number|null, source: string }}
+ */
+export function calculateMonthlyVelocity(salesPerDay) {
+  if (
+    salesPerDay === null ||
+    salesPerDay === undefined ||
+    typeof salesPerDay !== 'number' ||
+    isNaN(salesPerDay) ||
+    salesPerDay < 0
+  ) {
+    return {
+      value: null,
+      source: DATA_SOURCES.UNAVAILABLE,
+    };
+  }
+
+  return {
+    value: salesPerDay * 30,
+    source: DATA_SOURCES.ESTIMATED,
+  };
+}
+
+/**
+ * Formata uma data no formato brasileiro DD/MM/AAAA (TASK-030).
+ *
+ * @param {Date|string|null|undefined} dateInput - Data em ISO ou Date.
+ * @returns {string|null} String formatada ou null.
+ */
+export function formatDateBR(dateInput) {
+  if (!dateInput) return null;
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return null;
+
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
