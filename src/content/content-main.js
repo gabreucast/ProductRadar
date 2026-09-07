@@ -273,6 +273,18 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
 }
 
 /**
+ * Utilitário interno para renderização do ícone de informação ℹ️ com suporte a tooltip por hover/tap (TASK-031).
+ *
+ * @param {string} text - Texto explicativo do tooltip.
+ * @returns {string} HTML do elemento de ícone com atributos de tooltip.
+ */
+function renderInfoIcon(text) {
+  if (!text) return '';
+  const escapedText = String(text).replace(/"/g, '&quot;');
+  return `<span class="productradar-info-icon" data-tooltip="${escapedText}" title="${escapedText}" style="cursor: help; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; user-select: none;">ℹ️</span>`;
+}
+
+/**
  * Renderiza ou atualiza o painel overlay isolado do ProductRadar na página de detalhes de produto (PDP) (TASK-016 / TASK-020).
  * Combina os dados frescos da página com o contexto previamente capturado na busca, mantendo-os explicitamente separados.
  * 
@@ -365,43 +377,48 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     }
   }
 
-  // Bloco de Informações do Anúncio (Overview)
+  // Bloco de Informações do Anúncio (Overview - TASK-031 Collapsible)
   const pdpDetailsHtml = `
     <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Dados Observados na Página</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="productradar-section-toggle-btn" data-target="productradar-section-pdp-details" style="background: none; border: 1px solid #cbd5e1; border-radius: 4px; color: #475569; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+          <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Dados Observados na Página</span>
+        </div>
         <span style="font-size: 10px; background: #e0f2fe; color: #0369a1; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO NO ANÚNCIO]</span>
       </div>
-      <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 8px; line-height: 1.3;" title="${pdpTitle}">
-        ${pdpTitle}
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Preço PDP:</span> <div>${pdpPriceDisplay}</div>
+      <div id="productradar-section-pdp-details">
+        <div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 8px; line-height: 1.3;" title="${pdpTitle}">
+          ${pdpTitle}
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Frete:</span> <div>${shippingDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Catálogo:</span> <div>${catalogDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Estoque:</span> <div>${stockDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Vendas declaradas:</span> <div>${salesDeclaredDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
-          <span style="color: #6b7280;">Anúncio criado em:</span> <div>${creationDateDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
-          <span style="color: #6b7280;">Criado há:</span> <div>${createdAgoDisplay}</div>
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Preço PDP:</span> <div>${pdpPriceDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Frete:</span> <div>${shippingDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Catálogo:</span> <div>${catalogDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Estoque:</span> <div>${stockDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Vendas declaradas:</span> <div>${salesDeclaredDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f3f4f6; padding: 2px 0;">
+            <span style="color: #6b7280;">Anúncio criado em:</span> <div>${creationDateDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
+            <span style="color: #6b7280;">Criado há:</span> <div>${createdAgoDisplay}</div>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  // 2. Informações do Vendedor (TASK-030)
+  // 2. Informações do Vendedor (TASK-030 / TASK-031 Collapsible)
   let sellerNameDisplay = notFoundHtml;
   let sellerSalesDisplay = notFoundHtml;
   let sellerLocationDisplay = notFoundHtml;
@@ -421,24 +438,29 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   const sellerDetailsHtml = `
     <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span style="font-size: 11px; font-weight: 700; color: #86198f; text-transform: uppercase;">Informações do Vendedor</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="productradar-section-toggle-btn" data-target="productradar-section-seller-details" style="background: none; border: 1px solid #f0abfc; border-radius: 4px; color: #86198f; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+          <span style="font-size: 11px; font-weight: 700; color: #86198f; text-transform: uppercase;">Informações do Vendedor</span>
+        </div>
         <span style="font-size: 10px; background: #fae8ff; color: #a21caf; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO]</span>
       </div>
-      <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
-          <span style="color: #6b7280;">Vendedor:</span> <div>${sellerNameDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
-          <span style="color: #6b7280;">Vendas do vendedor:</span> <div>${sellerSalesDisplay}</div>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
-          <span style="color: #6b7280;">Localização do vendedor:</span> <div>${sellerLocationDisplay}</div>
+      <div id="productradar-section-seller-details">
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
+            <span style="color: #6b7280;">Vendedor:</span> <div>${sellerNameDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #fdf2f8; padding: 2px 0;">
+            <span style="color: #6b7280;">Vendas do vendedor:</span> <div>${sellerSalesDisplay}</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
+            <span style="color: #6b7280;">Localização do vendedor:</span> <div>${sellerLocationDisplay}</div>
+          </div>
         </div>
       </div>
     </div>
   `;
 
-  // 3. Custo do Fornecedor (Entrada manual do Usuário / TASK-029)
+  // 3. Custo do Fornecedor (Entrada manual do Usuário / TASK-029 / TASK-031 Collapsible & Tooltip)
   const canonicalId = (productData && productData.id) || null;
   const initialCostValue = (typeof supplierCost === 'number' && supplierCost >= 0)
     ? supplierCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -449,29 +471,32 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     supplierCostHtml = `
       <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase;">Custo do Fornecedor</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="productradar-section-toggle-btn" data-target="productradar-section-supplier-cost" style="background: none; border: 1px solid #fcd34d; border-radius: 4px; color: #92400e; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+            <span style="font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase;">Custo do Fornecedor</span>
+            ${renderInfoIcon('Valor informado manualmente pelo usuário para cálculo de rentabilidade. Não é extraído do Mercado Livre.')}
+          </div>
           <span style="font-size: 10px; background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[INFORMADO PELO USUÁRIO]</span>
         </div>
-        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
-          <span style="font-size: 11px; color: #4b5563; font-weight: 600;">R$</span>
-          <input
-            id="productradar-supplier-cost-input"
-            type="text"
-            value="${initialCostValue}"
-            placeholder="0,00"
-            data-product-id="${canonicalId}"
-            style="flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; background: #ffffff;"
-          />
-          <button
-            id="productradar-supplier-cost-save-btn"
-            style="background: #d97706; color: #ffffff; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;"
-          >
-            Salvar
-          </button>
-        </div>
-        <div id="productradar-supplier-cost-feedback" style="font-size: 10px; min-height: 14px; margin-top: 2px;"></div>
-        <div style="font-size: 10px; color: #6b7280; margin-top: 4px; border-top: 1px dashed #fde68a; padding-top: 4px;">
-          ℹ️ <em>Valor informado manualmente pelo usuário para cálculo de rentabilidade. Não é extraído do Mercado Livre.</em>
+        <div id="productradar-section-supplier-cost">
+          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: #4b5563; font-weight: 600;">R$</span>
+            <input
+              id="productradar-supplier-cost-input"
+              type="text"
+              value="${initialCostValue}"
+              placeholder="0,00"
+              data-product-id="${canonicalId}"
+              style="flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; background: #ffffff;"
+            />
+            <button
+              id="productradar-supplier-cost-save-btn"
+              style="background: #d97706; color: #ffffff; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;"
+            >
+              Salvar
+            </button>
+          </div>
+          <div id="productradar-supplier-cost-feedback" style="font-size: 10px; min-height: 14px; margin-top: 2px;"></div>
         </div>
       </div>
     `;
@@ -479,15 +504,21 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     supplierCostHtml = `
       <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Custo do Fornecedor</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="productradar-section-toggle-btn" data-target="productradar-section-supplier-cost-null" style="background: none; border: 1px solid #cbd5e1; border-radius: 4px; color: #475569; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+            <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Custo do Fornecedor</span>
+            ${renderInfoIcon('ID do produto não identificado. Custo do fornecedor indisponível.')}
+          </div>
           <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">Não encontrado</span>
         </div>
-        ℹ️ <em>ID do produto não identificado. Custo do fornecedor indisponível.</em>
+        <div id="productradar-section-supplier-cost-null">
+          <em>ID do produto não identificado. Custo do fornecedor indisponível.</em>
+        </div>
       </div>
     `;
   }
 
-  // 4. Contexto Herdado da Busca (Search Context)
+  // 4. Contexto Herdado da Busca (Search Context / TASK-031 Collapsible)
   let searchContextHtml = '';
   if (searchContext) {
     const sPrice = searchContext.price && searchContext.price.current !== null
@@ -504,27 +535,42 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     searchContextHtml = `
       <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <span style="font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase;">Contexto da Busca Anterior</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="productradar-section-toggle-btn" data-target="productradar-section-search-context" style="background: none; border: 1px solid #86efac; border-radius: 4px; color: #166534; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+            <span style="font-size: 11px; font-weight: 700; color: #166534; text-transform: uppercase;">Contexto da Busca Anterior</span>
+          </div>
           <span style="font-size: 10px; background: #dcfce7; color: #15803d; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[OBSERVADO NA BUSCA]</span>
         </div>
-        <div style="font-size: 11px; color: #166534; margin-bottom: 4px;">
-          Preço na busca: <strong>${sPrice}</strong> ${sDiscount ? `<span style="color: #15803d; font-weight: 700;">(${sDiscount})</span>` : ''}
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; color: #374151;">
-          <div><span style="color: #6b7280;">Avaliação:</span> <strong>${sRating}</strong></div>
-          <div><span style="color: #6b7280;">Patrocinado:</span> <strong>${sSponsored}</strong></div>
+        <div id="productradar-section-search-context">
+          <div style="font-size: 11px; color: #166534; margin-bottom: 4px;">
+            Preço na busca: <strong>${sPrice}</strong> ${sDiscount ? `<span style="color: #15803d; font-weight: 700;">(${sDiscount})</span>` : ''}
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; color: #374151;">
+            <div><span style="color: #6b7280;">Avaliação:</span> <strong>${sRating}</strong></div>
+            <div><span style="color: #6b7280;">Patrocinado:</span> <strong>${sSponsored}</strong></div>
+          </div>
         </div>
       </div>
     `;
   } else {
     searchContextHtml = `
       <div style="background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 8px; padding: 8px 10px; margin-bottom: 12px; font-size: 11px; color: #6b7280;">
-        ℹ️ <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior) <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">Não encontrado</span>.</em>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="productradar-section-toggle-btn" data-target="productradar-section-search-context-null" style="background: none; border: 1px solid #cbd5e1; border-radius: 4px; color: #475569; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+            <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Contexto da Busca Anterior</span>
+            ${renderInfoIcon('Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior).')}
+          </div>
+          <span style="font-size: 10px; background: #f3f4f6; color: #6b7280; padding: 1px 4px; border-radius: 4px; font-weight: 700;">Não encontrado</span>
+        </div>
+        <div id="productradar-section-search-context-null">
+          <em>Contexto da busca indisponível para este produto (anúncio acessado diretamente ou não visualizado na busca anterior).</em>
+        </div>
       </div>
     `;
   }
 
-  // 5. Inteligência e Indicadores do Produto (TASK-030)
+  // 5. Inteligência e Indicadores do Produto (TASK-030 / TASK-031 Hover Tooltips)
   const indicatorRows = [];
 
   // Faturando (Vendas declaradas × preço)
@@ -539,11 +585,8 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   }
   indicatorRows.push(`
     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-      <span style="color: #4b5563;">Faturando:</span>
+      <span style="color: #4b5563;">Faturando: ${renderInfoIcon('Faturamento bruto estimado (vendas declaradas × preço unitário). NÃO representa lucro líquido.')}</span>
       <div>${revenueDisplay}</div>
-    </div>
-    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-      ℹ️ <em>Faturamento bruto estimado (vendas declaradas × preço unitário). NÃO representa lucro líquido.</em>
     </div>
   `);
 
@@ -568,11 +611,8 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
 
   indicatorRows.push(`
     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-      <span style="color: #4b5563;">Vendas por dia:</span>
+      <span style="color: #4b5563;">Vendas por dia: ${renderInfoIcon('Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.')}</span>
       <div>${spdDisplay}</div>
-    </div>
-    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-      ℹ️ <em>Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.</em>
     </div>
   `);
 
@@ -635,11 +675,8 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   }
   indicatorRows.push(`
     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 0; border-bottom: 1px solid #f3f4f6;">
-      <span style="color: #4b5563;">Imposto:</span>
+      <span style="color: #4b5563;">Imposto: ${renderInfoIcon(`Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.`)}</span>
       <div>${taxDisplay}</div>
-    </div>
-    <div style="font-size: 10px; color: #6b7280; margin-bottom: 4px; padding-left: 2px;">
-      ℹ️ <em>Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.</em>
     </div>
   `);
 
@@ -686,8 +723,15 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
 
   const indicatorsHtml = `
     <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
-      <div style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase; margin-bottom: 6px;">Indicadores de Inteligência do Produto</div>
-      ${indicatorRows.join('')}
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button class="productradar-section-toggle-btn" data-target="productradar-section-product-indicators" style="background: none; border: 1px solid #cbd5e1; border-radius: 4px; color: #475569; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
+          <span style="font-size: 11px; font-weight: 700; color: #4b5563; text-transform: uppercase;">Indicadores de Inteligência do Produto</span>
+        </div>
+      </div>
+      <div id="productradar-section-product-indicators">
+        ${indicatorRows.join('')}
+      </div>
     </div>
   `;
 
@@ -728,10 +772,28 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         ${searchContextHtml}
         ${indicatorsHtml}
       </div>
+
+      <!-- Tooltip flutuante global para PDP (TASK-031) -->
+      <div id="productradar-pdp-tooltip" style="
+        display: none;
+        position: fixed;
+        z-index: 1000001;
+        max-width: 240px;
+        background-color: #1f2937;
+        color: #ffffff;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: normal;
+        line-height: 1.35;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      "></div>
     </div>
   `;
 
-  // Toggle minimize/expand
+  // Toggle minimize/expand do painel completo
   const toggleBtn = overlayEl.querySelector('#productradar-pdp-toggle-btn');
   const contentPanel = overlayEl.querySelector('#productradar-pdp-content-panel');
   if (toggleBtn && contentPanel) {
@@ -744,6 +806,76 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         toggleBtn.innerText = '□';
       }
     };
+  }
+
+  // Toggle de minimização/expansão independente por seção (TASK-031)
+  const sectionToggleBtns = overlayEl.querySelectorAll('.productradar-section-toggle-btn');
+  sectionToggleBtns.forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const targetId = btn.getAttribute('data-target');
+      if (!targetId) return;
+      const targetEl = overlayEl.querySelector(`#${targetId}`);
+      if (!targetEl) return;
+      if (targetEl.style.display === 'none') {
+        targetEl.style.display = 'block';
+        btn.innerText = '−';
+      } else {
+        targetEl.style.display = 'none';
+        btn.innerText = '+';
+      }
+    };
+  });
+
+  // Gerenciamento de tooltips por hover/tap (TASK-031)
+  const tooltipEl = overlayEl.querySelector('#productradar-pdp-tooltip');
+  const infoIcons = overlayEl.querySelectorAll('.productradar-info-icon');
+
+  if (tooltipEl && infoIcons.length > 0) {
+    const showTooltipForIcon = (icon) => {
+      const text = icon.getAttribute('data-tooltip') || icon.getAttribute('title');
+      if (!text) return;
+      tooltipEl.textContent = text;
+      tooltipEl.style.display = 'block';
+      const rect = icon.getBoundingClientRect();
+      const tooltipRect = tooltipEl.getBoundingClientRect();
+
+      let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+      if (left < 10) left = 10;
+      if (left + tooltipRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - tooltipRect.width - 10;
+      }
+
+      let top = rect.top - tooltipRect.height - 8;
+      if (top < 10) {
+        top = rect.bottom + 8;
+      }
+
+      tooltipEl.style.left = `${left}px`;
+      tooltipEl.style.top = `${top}px`;
+    };
+
+    const hideTooltip = () => {
+      if (tooltipEl) {
+        tooltipEl.style.display = 'none';
+      }
+    };
+
+    infoIcons.forEach((icon) => {
+      icon.onmouseenter = () => showTooltipForIcon(icon);
+      icon.onmouseleave = hideTooltip;
+      icon.onclick = (e) => {
+        e.stopPropagation();
+        if (tooltipEl.style.display === 'block') {
+          hideTooltip();
+        } else {
+          showTooltipForIcon(icon);
+        }
+      };
+    });
+
+    overlayEl.addEventListener('mouseleave', hideTooltip);
+    doc.addEventListener('click', hideTooltip);
   }
 
   // Salvar Custo do Fornecedor (TASK-029)
