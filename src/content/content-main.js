@@ -1237,23 +1237,9 @@ export function observeDynamicContent(
       return hasCount && Array.isArray(cards) && cards.length > 0;
     }
     if (context === PAGE_CONTEXTS.PRODUCT_DETAIL) {
-      const p = extractProductPageData(documentRoot);
-      const hasBasicInfo = Boolean(p && p.title && p.price && p.price.current !== null);
-      if (!hasBasicInfo) return false;
-
-      // TASK-035: Título e preço isolados não são mais suficientes para encerrar a observação.
-      // O observador deve aguardar a avaliação dos dados estruturados/hidratados (estoque, data de criação, vendedor)
-      // ou até o encerramento por timeout máximo limitado (TASK-024).
-      const hasStructuredOrHydratedData = Boolean(
-        p.availableStock !== null &&
-        (
-          p.creationDate !== null ||
-          p.soldQuantity !== null ||
-          (p.seller && (p.seller.name !== null || p.seller.reputation !== null || p.seller.powerSellerStatus !== null))
-        )
-      );
-
-      return hasStructuredOrHydratedData;
+      // TASK-033: Em páginas de produto (PDP), o observador permanece ativo para capturar
+      // trocas de variação (cor, tamanho) em tempo real sem necessidade de recarregar a página (F5).
+      return false;
     }
     return true;
   };
@@ -1269,10 +1255,17 @@ export function observeDynamicContent(
     }
   };
 
-  // Agenda timeout de término máximo para garantir execução finita e limitada
-  activeMaxTimeout = setTimeout(() => {
-    stopDynamicContentObserver();
-  }, maxWaitMs);
+  // Agenda timeout de término para busca ou timeout estendido com renovação para PDP
+  if (context === PAGE_CONTEXTS.SEARCH_RESULTS) {
+    activeMaxTimeout = setTimeout(() => {
+      stopDynamicContentObserver();
+    }, maxWaitMs);
+  } else if (context === PAGE_CONTEXTS.PRODUCT_DETAIL) {
+    // Para PDP, mantém timeout amplo (60s) renovado por mutações/interações
+    activeMaxTimeout = setTimeout(() => {
+      stopDynamicContentObserver();
+    }, 60000);
+  }
 
   activeObserver = new MutationObserver((mutations) => {
     // Ignora mutações geradas pelos próprios overlays do ProductRadar
