@@ -216,6 +216,9 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
     `;
   }
 
+  const existingSearchPanel = overlayEl.querySelector('#productradar-content-panel');
+  const savedSearchScrollTop = existingSearchPanel ? existingSearchPanel.scrollTop : 0;
+
   overlayEl.innerHTML = `
     <div style="
       position: fixed;
@@ -267,6 +270,10 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
         toggleBtn.innerText = '□';
       }
     };
+  }
+
+  if (contentPanel && savedSearchScrollTop > 0) {
+    contentPanel.scrollTop = savedSearchScrollTop;
   }
 
   return overlayEl;
@@ -385,7 +392,15 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   if (productData && productData.listingType) {
     const formattedListing = formatListingType(productData.listingType);
     if (formattedListing) {
-      pdpRows.push(createRow('listing_type', 35, 'Tipo de anúncio', `<strong style="color: #111827;">${formattedListing}</strong>`, '[OBSERVADO]', 'green'));
+      pdpRows.push(createRow(
+        'listing_type',
+        35,
+        'Tipo de anúncio',
+        `<strong style="color: #111827;">${formattedListing}</strong>`,
+        '[OBSERVADO]',
+        'green',
+        'Tipo de publicação observado no anúncio (ex: Clássico, Premium, Grátis). O custo e a comissão de venda dependem do tipo de anúncio.'
+      ));
     }
   }
 
@@ -410,15 +425,36 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   }
 
   if (productData && typeof productData.commission === 'number') {
-    pdpRows.push(createRow('commission', 85, 'Comissão ML', `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow(
+      'commission',
+      85,
+      'Comissão ML',
+      `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`,
+      '[OBSERVADO]',
+      'green',
+      'Valor da comissão de venda observado diretamente na página pública deste anúncio.'
+    ));
+  }
+
+  if (productData && productData.shipping && typeof productData.shipping.cost === 'number') {
+    pdpRows.push(createRow(
+      'freight_cost',
+      86,
+      'Custo de frete',
+      `<strong style="color: #111827;">R$ ${productData.shipping.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`,
+      '[OBSERVADO]',
+      'green',
+      'Valor monetário do frete observado publicamente no anúncio.'
+    ));
   }
 
   const pNum = productData && productData.price && typeof productData.price.current === 'number' ? productData.price.current : null;
   const commNum = productData && typeof productData.commission === 'number' ? productData.commission : null;
   const fixFeeNum = productData && typeof productData.fixedFee === 'number' ? productData.fixedFee : 0;
+  const freightNum = productData && productData.shipping && typeof productData.shipping.cost === 'number' ? productData.shipping.cost : 0;
 
   if (pNum !== null) {
-    const costCalc = calculateSellingCosts({ price: pNum, commission: commNum, fixedFee: fixFeeNum });
+    const costCalc = calculateSellingCosts({ price: pNum, commission: commNum, fixedFee: fixFeeNum, freightCost: freightNum });
     if (costCalc.sellingCost.value !== null) {
       pdpRows.push(createRow(
         'selling_cost_total',
@@ -427,7 +463,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         `<strong style="color: #111827;">R$ ${costCalc.sellingCost.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`,
         '[ESTIMADO / CALCULADO]',
         'blue',
-        'Custo total de venda estimado (comissão ML + tarifas de publicação observadas na página).'
+        'Custo total de venda estimado para o tipo de anúncio observando a comissão e tarifas expostas na página.'
       ));
     } else {
       pdpRows.push(createRow(
@@ -437,7 +473,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         `<strong style="color: #6b7280;">Não calculated</strong>`.replace('calculated', 'calculado'),
         '[CALCULADO]',
         'amber',
-        'Não foi possível calcular o custo total de venda porque os componentes de tarifa/comissão não foram expostos no estado público desta página.'
+        'O custo de venda depende do tipo de anúncio (Clássico, Premium, etc.). Não foi possível calcular porque as taxas e comissões do anúncio não foram expostas no estado público desta página.'
       ));
     }
   }
@@ -710,6 +746,18 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     `;
   }
 
+  // Captura a posição de rolagem e seções minimizadas antes da atualização para evitar saltos (TASK-044)
+  const existingPanel = overlayEl.querySelector('#productradar-pdp-content-panel');
+  const savedScrollTop = existingPanel ? existingPanel.scrollTop : 0;
+
+  const collapsedSectionIds = new Set();
+  const existingSectionEls = overlayEl.querySelectorAll('[id^="productradar-section-"]');
+  existingSectionEls.forEach((el) => {
+    if (el.style.display === 'none') {
+      collapsedSectionIds.add(el.id);
+    }
+  });
+
   overlayEl.innerHTML = `
     <div style="
       position: fixed;
@@ -801,6 +849,25 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       }
     };
   });
+
+  // Restaura estados de minimização de seção previamente salvos (TASK-044)
+  if (collapsedSectionIds.size > 0) {
+    collapsedSectionIds.forEach((secId) => {
+      const secEl = overlayEl.querySelector(`#${secId}`);
+      if (secEl) {
+        secEl.style.display = 'none';
+        const toggleBtn = overlayEl.querySelector(`button[data-target="${secId}"]`);
+        if (toggleBtn) {
+          toggleBtn.innerText = '+';
+        }
+      }
+    });
+  }
+
+  // Restaura a posição exata de rolagem vertical do painel do produto (TASK-044)
+  if (contentPanel && savedScrollTop > 0) {
+    contentPanel.scrollTop = savedScrollTop;
+  }
 
   // Gerenciamento de tooltips por hover/tap (TASK-031)
   const tooltipEl = overlayEl.querySelector('#productradar-pdp-tooltip');

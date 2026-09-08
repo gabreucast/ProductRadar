@@ -865,7 +865,7 @@ export function formatListingType(rawType) {
  * @param {number|null} [params.fixedFee=0] - Tarifa fixa observada (se disponível).
  * @returns {{ sellingCost: { value: number|null, source: string }, netAmount: { value: number|null, source: string } }}
  */
-export function calculateSellingCosts({ price, commission, fixedFee = 0 }) {
+export function calculateSellingCosts({ price, commission, fixedFee = 0, freightCost = 0 }) {
   if (
     typeof price !== 'number' || isNaN(price) || price <= 0 ||
     typeof commission !== 'number' || isNaN(commission) || commission < 0
@@ -877,7 +877,8 @@ export function calculateSellingCosts({ price, commission, fixedFee = 0 }) {
   }
 
   const fee = typeof fixedFee === 'number' && !isNaN(fixedFee) && fixedFee >= 0 ? fixedFee : 0;
-  const totalCost = commission + fee;
+  const freight = typeof freightCost === 'number' && !isNaN(freightCost) && freightCost >= 0 ? freightCost : 0;
+  const totalCost = commission + fee + freight;
   const net = price - totalCost;
 
   return {

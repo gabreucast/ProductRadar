@@ -616,6 +616,7 @@ export function extractProductPageData(documentRoot) {
   // 7. Frete e Selo Full
   let isFree = false;
   let isFull = false;
+  let freightCost = null;
   const shippingEl = queryFirst(documentRoot, SELECTORS.PRODUCT.SHIPPING);
   if (shippingEl) {
     const shippingText = (shippingEl.textContent || '').toLowerCase();
@@ -627,6 +628,12 @@ export function extractProductPageData(documentRoot) {
       shippingEl.querySelector('[class*="full" i], [aria-label*="full" i], svg use[href*="full" i]')
     ) {
       isFull = true;
+    }
+    if (!isFree) {
+      const parsedCost = parseMonetaryValue(shippingEl);
+      if (parsedCost !== null) {
+        freightCost = parsedCost;
+      }
     }
   }
   if (!isFree && structured.isFreeShipping) {
@@ -766,6 +773,7 @@ export function extractProductPageData(documentRoot) {
     shipping: {
       isFree,
       isFull,
+      cost: freightCost,
     },
   };
 }
