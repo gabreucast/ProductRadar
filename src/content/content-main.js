@@ -337,6 +337,24 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     `;
   };
 
+  const createRow = (key, order, label, valueHtml, badgeText = '[OBSERVADO]', badgeType = 'green', tooltipText = null) => {
+    const html = renderRow(label, valueHtml, badgeText, badgeType, tooltipText);
+    return { key, order, html };
+  };
+
+  const sortAndRenderRows = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return '';
+    const uniqueMap = new Map();
+    for (const row of rows) {
+      if (row && row.key && row.html && !uniqueMap.has(row.key)) {
+        uniqueMap.set(row.key, row);
+      }
+    }
+    const uniqueRows = Array.from(uniqueMap.values());
+    uniqueRows.sort((a, b) => (a.order || 999) - (b.order || 999));
+    return uniqueRows.map((r) => r.html).join('');
+  };
+
   // 1. Dados Observados na Página (Produto / PDP Overview)
   const pdpTitle = productData && productData.title ? productData.title : null;
   const pdpRows = [];
@@ -349,7 +367,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     if (productData.price.discountPercent) {
       pStr += ` <span style="font-size: 10px; color: #059669; font-weight: 700;">(${productData.price.discountPercent}% OFF)</span>`;
     }
-    pdpRows.push(renderRow('Preço PDP', pStr, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('price', 10, 'Preço PDP', pStr, '[OBSERVADO]', 'green'));
   }
 
   if (productData && productData.shipping && (productData.shipping.isFree || productData.shipping.isFull)) {
@@ -357,48 +375,50 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     if (productData.shipping.isFree && productData.shipping.isFull) shipText = 'Frete Grátis (Full)';
     else if (productData.shipping.isFree) shipText = 'Frete Grátis';
     else if (productData.shipping.isFull) shipText = 'Envio Full';
-    pdpRows.push(renderRow('Frete', `<strong style="color: #111827;">${shipText}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('shipping', 20, 'Frete', `<strong style="color: #111827;">${shipText}</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && typeof productData.isCatalog === 'boolean') {
     const catText = productData.isCatalog ? 'Sim (Anúncio de Catálogo)' : 'Não (Anúncio Padrão)';
-    pdpRows.push(renderRow('Catálogo', `<strong style="color: #111827;">${catText}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('catalog', 30, 'Catálogo', `<strong style="color: #111827;">${catText}</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && typeof productData.availableStock === 'number') {
-    pdpRows.push(renderRow('Estoque', `<strong style="color: #111827;">${productData.availableStock} unidades</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('stock', 40, 'Estoque', `<strong style="color: #111827;">${productData.availableStock} unidades</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && typeof productData.soldQuantity === 'number') {
-    pdpRows.push(renderRow('Vendas declaradas', `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('sold_quantity', 50, 'Vendas declaradas', `<strong style="color: #111827;">+${productData.soldQuantity.toLocaleString('pt-BR')} vendidos</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && productData.brand) {
-    pdpRows.push(renderRow('Marca', `<strong style="color: #111827;">${productData.brand}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('brand', 60, 'Marca', `<strong style="color: #111827;">${productData.brand}</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && productData.category) {
-    pdpRows.push(renderRow('Categoria', `<strong style="color: #111827;">${productData.category}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('category', 70, 'Categoria', `<strong style="color: #111827;">${productData.category}</strong>`, '[OBSERVADO]', 'green'));
   }
 
   if (productData && productData.installmentInfo) {
-    pdpRows.push(renderRow('Parcelamento', `<strong style="color: #111827;">${productData.installmentInfo}</strong>`, '[OBSERVADO]', 'green'));
+    pdpRows.push(createRow('installments', 80, 'Parcelamento', `<strong style="color: #111827;">${productData.installmentInfo}</strong>`, '[OBSERVADO]', 'green'));
   }
 
   const creationDate = productData && productData.creationDate ? productData.creationDate : null;
   if (creationDate) {
     const formattedDate = formatDateBR(creationDate);
     if (formattedDate) {
-      pdpRows.push(renderRow('Anúncio criado em', `<strong style="color: #111827;">${formattedDate}</strong>`, '[OBSERVADO]', 'green'));
+      pdpRows.push(createRow('creation_date', 90, 'Anúncio criado em', `<strong style="color: #111827;">${formattedDate}</strong>`, '[OBSERVADO]', 'green'));
     }
     const elapsedDays = calculateElapsedDays(creationDate);
     if (elapsedDays !== null) {
-      pdpRows.push(renderRow('Criado há', `<strong style="color: #111827;">${elapsedDays} dias</strong>`, '[CALCULADO]', 'blue'));
+      pdpRows.push(createRow('elapsed_days', 100, 'Criado há', `<strong style="color: #111827;">${elapsedDays} dias</strong>`, '[CALCULADO]', 'blue'));
     }
   }
 
+  const pdpRowsHtml = sortAndRenderRows(pdpRows);
+
   let pdpDetailsHtml = '';
-  if (pdpTitle || pdpRows.length > 0) {
+  if (pdpTitle || pdpRowsHtml) {
     const titleBlock = pdpTitle
       ? `<div style="font-size: 12px; font-weight: 600; color: #111827; margin-bottom: 8px; line-height: 1.3;" title="${pdpTitle}">${pdpTitle}</div>`
       : '';
@@ -414,7 +434,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         <div id="productradar-section-pdp-details">
           ${titleBlock}
           <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${pdpRows.join('')}
+            ${pdpRowsHtml}
           </div>
         </div>
       </div>
@@ -425,22 +445,36 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   const sellerRows = [];
   if (productData && productData.seller) {
     if (productData.seller.name) {
-      sellerRows.push(renderRow('Vendedor', `<strong style="color: #111827;">${productData.seller.name}</strong>`, '[OBSERVADO]', 'purple'));
+      sellerRows.push(createRow('seller_name', 10, 'Vendedor', `<strong style="color: #111827;">${productData.seller.name}</strong>`, '[OBSERVADO]', 'purple'));
     }
     if (productData.seller.reputation || productData.seller.powerSellerStatus) {
       const repText = productData.seller.reputation || (productData.seller.powerSellerStatus === 'platinum' ? 'MercadoLíder Platinum' : productData.seller.powerSellerStatus);
-      sellerRows.push(renderRow('Reputação do vendedor', `<strong style="color: #111827;">${repText}</strong>`, '[OBSERVADO]', 'purple'));
+      sellerRows.push(createRow('seller_reputation', 20, 'Reputação do vendedor', `<strong style="color: #111827;">${repText}</strong>`, '[OBSERVADO]', 'purple'));
     }
     if (productData.seller.sales) {
-      sellerRows.push(renderRow('Vendas do vendedor', `<strong style="color: #111827;">${productData.seller.sales}</strong>`, '[OBSERVADO]', 'purple'));
+      sellerRows.push(createRow('seller_sales', 30, 'Vendas do vendedor', `<strong style="color: #111827;">${productData.seller.sales}</strong>`, '[OBSERVADO]', 'purple'));
+    }
+    if (productData.seller.officialStore) {
+      sellerRows.push(createRow('official_store', 40, 'Loja oficial', `<strong style="color: #111827;">${productData.seller.officialStore}</strong>`, '[OBSERVADO]', 'purple'));
+    }
+    if (productData.seller.followers) {
+      sellerRows.push(createRow('followers', 50, 'Seguidores', `<strong style="color: #111827;">${productData.seller.followers}</strong>`, '[OBSERVADO]', 'purple'));
+    }
+    if (productData.seller.productCount) {
+      sellerRows.push(createRow('seller_products', 60, 'Anúncios do vendedor', `<strong style="color: #111827;">${productData.seller.productCount}</strong>`, '[OBSERVADO]', 'purple'));
+    }
+    if (productData.seller.id) {
+      sellerRows.push(createRow('seller_id', 70, 'ID do vendedor', `<strong style="color: #111827;">${productData.seller.id}</strong>`, '[OBSERVADO]', 'purple'));
     }
     if (productData.seller.location) {
-      sellerRows.push(renderRow('Localização do vendedor', `<strong style="color: #111827;">${productData.seller.location}</strong>`, '[OBSERVADO]', 'purple'));
+      sellerRows.push(createRow('seller_location', 80, 'Localização do vendedor', `<strong style="color: #111827;">${productData.seller.location}</strong>`, '[OBSERVADO]', 'purple'));
     }
   }
 
+  const sellerRowsHtml = sortAndRenderRows(sellerRows);
+
   let sellerDetailsHtml = '';
-  if (sellerRows.length > 0) {
+  if (sellerRowsHtml) {
     sellerDetailsHtml = `
       <div style="background: #fdf4ff; border: 1px solid #f5d0fe; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -452,7 +486,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         </div>
         <div id="productradar-section-seller-details">
           <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${sellerRows.join('')}
+            ${sellerRowsHtml}
           </div>
         </div>
       </div>
@@ -463,15 +497,29 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   const ratingRows = [];
   if (productData && productData.rating) {
     if (typeof productData.rating.score === 'number') {
-      ratingRows.push(renderRow('Pontuação', `<strong style="color: #111827;">★ ${productData.rating.score} / 5.0</strong>`, '[OBSERVADO]', 'green'));
+      ratingRows.push(createRow('rating_score', 10, 'Pontuação', `<strong style="color: #111827;">★ ${productData.rating.score} / 5.0</strong>`, '[OBSERVADO]', 'green'));
     }
     if (typeof productData.rating.reviewsCount === 'number') {
-      ratingRows.push(renderRow('Total de avaliações', `<strong style="color: #111827;">${productData.rating.reviewsCount.toLocaleString('pt-BR')} avaliações</strong>`, '[OBSERVADO]', 'green'));
+      ratingRows.push(createRow('rating_count', 20, 'Total de avaliações', `<strong style="color: #111827;">${productData.rating.reviewsCount.toLocaleString('pt-BR')} avaliações</strong>`, '[OBSERVADO]', 'green'));
+    }
+    if (productData.rating.reviewsWithComments) {
+      ratingRows.push(createRow('reviews_comments', 30, 'Avaliações com comentários', `<strong style="color: #111827;">${productData.rating.reviewsWithComments}</strong>`, '[OBSERVADO]', 'green'));
+    }
+    if (productData.rating.reviewsWithPhotos) {
+      ratingRows.push(createRow('reviews_photos', 40, 'Avaliações com fotos', `<strong style="color: #111827;">${productData.rating.reviewsWithPhotos}</strong>`, '[OBSERVADO]', 'green'));
+    }
+    if (productData.rating.reviewsWithVideos) {
+      ratingRows.push(createRow('reviews_videos', 50, 'Avaliações com vídeos', `<strong style="color: #111827;">${productData.rating.reviewsWithVideos}</strong>`, '[OBSERVADO]', 'green'));
+    }
+    if (productData.rating.totalMedia) {
+      ratingRows.push(createRow('review_media', 60, 'Mídia em avaliações', `<strong style="color: #111827;">${productData.rating.totalMedia}</strong>`, '[OBSERVADO]', 'green'));
     }
   }
 
+  const ratingRowsHtml = sortAndRenderRows(ratingRows);
+
   let ratingDetailsHtml = '';
-  if (ratingRows.length > 0) {
+  if (ratingRowsHtml) {
     ratingDetailsHtml = `
       <div style="background: #fffdf0; border: 1px solid #fef08a; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -483,7 +531,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         </div>
         <div id="productradar-section-rating-details">
           <div style="display: flex; flex-direction: column; gap: 2px;">
-            ${ratingRows.join('')}
+            ${ratingRowsHtml}
           </div>
         </div>
       </div>
@@ -539,17 +587,18 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     if (searchContext.price && searchContext.price.current !== null) {
       let sPrice = `R$ ${searchContext.price.current.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
       if (searchContext.price.discountPercent) sPrice += ` (${searchContext.price.discountPercent}% OFF)`;
-      sRows.push(renderRow('Preço na busca', `<strong>${sPrice}</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
+      sRows.push(createRow('search_price', 10, 'Preço na busca', `<strong>${sPrice}</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
     }
     if (searchContext.rating && searchContext.rating.score !== null) {
-      sRows.push(renderRow('Avaliação na busca', `<strong>★ ${searchContext.rating.score} (${searchContext.rating.reviewsCount || 0})</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
+      sRows.push(createRow('search_rating', 20, 'Avaliação na busca', `<strong>★ ${searchContext.rating.score} (${searchContext.rating.reviewsCount || 0})</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
     }
     if (typeof searchContext.isSponsored === 'boolean') {
       const sSponsored = searchContext.isSponsored ? 'Sim (Patrocinado)' : 'Não (Orgânico)';
-      sRows.push(renderRow('Patrocinado', `<strong>${sSponsored}</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
+      sRows.push(createRow('sponsored', 30, 'Patrocinado', `<strong>${sSponsored}</strong>`, '[OBSERVADO NA BUSCA]', 'green'));
     }
 
-    if (sRows.length > 0) {
+    const sRowsHtml = sortAndRenderRows(sRows);
+    if (sRowsHtml) {
       searchContextHtml = `
         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -561,7 +610,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
           </div>
           <div id="productradar-section-search-context">
             <div style="display: flex; flex-direction: column; gap: 2px;">
-              ${sRows.join('')}
+              ${sRowsHtml}
             </div>
           </div>
         </div>
@@ -575,64 +624,63 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   const soldNum = productData && typeof productData.soldQuantity === 'number' ? productData.soldQuantity : null;
   const stockNum = productData && typeof productData.availableStock === 'number' ? productData.availableStock : null;
 
-  // Faturando (Vendas declaradas × Preço unitário)
+  // Faturando (Vendas declaradas × Preço unitário) - Order: 10
   if (soldNum !== null && priceNum !== null) {
     const revCalc = calculateRevenue(soldNum, priceNum);
     if (revCalc.value !== null) {
-      indicatorRows.push(renderRow('Faturando', `<strong style="color: #111827;">R$ ${revCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Faturamento bruto estimado (vendas declaradas × preço unitário). NÃO representa lucro líquido.'));
+      indicatorRows.push(createRow('revenue', 10, 'Faturando', `<strong style="color: #111827;">R$ ${revCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Faturamento bruto estimado (vendas declaradas × preço unitário). NÃO representa lucro líquido.'));
     }
   }
 
-  // Estoque acumulado em R$ (Estoque × Preço unitário)
+  // Estoque acumulado em R$ (Estoque × Preço unitário) - Order: 20
   if (stockNum !== null && priceNum !== null) {
     const stockVal = stockNum * priceNum;
-    indicatorRows.push(renderRow('Estoque acumulado em R$', `<strong style="color: #111827;">R$ ${stockVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Valor monetário total estimado do estoque atual (unidades de estoque × preço unitário).'));
+    indicatorRows.push(createRow('stock_value', 20, 'Estoque acumulado em R$', `<strong style="color: #111827;">R$ ${stockVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Valor monetário total estimado do estoque atual (unidades de estoque × preço unitário).'));
   }
 
-  // Vendas por dia & Velocidades
+  // Vendas por dia, Vendas mensais, Ritmo atual - Order: 30, 40, 50
   const effectiveSold = soldNum !== null ? soldNum : (searchContext && typeof searchContext.soldQuantity === 'number' ? searchContext.soldQuantity : null);
-  let spdCalc = { value: null };
   if (effectiveSold !== null && creationDate) {
-    spdCalc = calculateSalesPerDay(effectiveSold, creationDate);
+    const spdCalc = calculateSalesPerDay(effectiveSold, creationDate);
     if (spdCalc.value !== null) {
-      indicatorRows.push(renderRow('Vendas por dia', `<strong style="color: #111827;">${spdCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / dia</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.'));
+      indicatorRows.push(createRow('sales_per_day', 30, 'Vendas por dia', `<strong style="color: #111827;">${spdCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / dia</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Velocidade estimada (vendas declaradas divididas pelos dias decorridos desde a criação do anúncio). É uma estimativa derivada e NÃO representa garantia de lucro, margem, concorrência ou oportunidade.'));
 
       const monthlyVelocity = calculateMonthlyVelocity(spdCalc.value);
       if (monthlyVelocity.value !== null) {
         const roundedMonthly = Math.round(monthlyVelocity.value).toLocaleString('pt-BR');
-        indicatorRows.push(renderRow('Vendas mensais', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Estimativa de vendas acumuladas em 30 dias (vendas por dia × 30).'));
-        indicatorRows.push(renderRow('Ritmo atual (vendas/mês)', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Projeção do ritmo de vendas em 30 dias com base no histórico decorrido.'));
+        indicatorRows.push(createRow('monthly_velocity', 40, 'Vendas mensais', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Estimativa de vendas acumuladas em 30 dias (vendas por dia × 30).'));
+        indicatorRows.push(createRow('current_rhythm', 50, 'Ritmo atual (vendas/mês)', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Projeção do ritmo de vendas em 30 dias com base no histórico decorrido.'));
       }
     }
   }
 
-  // Visitas
+  // Visitas - Order: 55
   if (productData && typeof productData.visits === 'number') {
-    indicatorRows.push(renderRow('Visitas', `<strong style="color: #111827;">${productData.visits.toLocaleString('pt-BR')}</strong>`, '[OBSERVADO]', 'green'));
+    indicatorRows.push(createRow('visits', 55, 'Visitas', `<strong style="color: #111827;">${productData.visits.toLocaleString('pt-BR')}</strong>`, '[OBSERVADO]', 'green'));
   }
 
-  // Conversão
+  // Conversão - Order: 60
   if (soldNum !== null && productData && typeof productData.visits === 'number' && productData.visits > 0) {
     const convCalc = calculateConversionRate(soldNum, productData.visits);
     if (convCalc.value !== null) {
-      indicatorRows.push(renderRow('Conversão', `<strong style="color: #111827;">${convCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Taxa estimada de conversão de visitantes em compradores (vendas / visitas × 100).'));
+      indicatorRows.push(createRow('conversion', 60, 'Conversão', `<strong style="color: #111827;">${convCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Taxa estimada de conversão de visitantes em compradores (vendas / visitas × 100).'));
     }
   }
 
-  // Imposto (Simulação alíquota)
+  // Imposto - Order: 70
   if (priceNum !== null && typeof taxRate === 'number') {
     const taxCalc = calculateEstimatedTax(priceNum, taxRate);
     if (taxCalc.value !== null) {
-      indicatorRows.push(renderRow('Imposto', `<strong style="color: #111827;">R$ ${taxCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[SIMULAÇÃO / CALCULADO]', 'blue', `Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.`));
+      indicatorRows.push(createRow('tax', 70, 'Imposto', `<strong style="color: #111827;">R$ ${taxCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[SIMULAÇÃO / CALCULADO]', 'blue', `Simulação do usuário com alíquota configurada de ${taxRate}%. Não é dado observado do Mercado Livre.`));
     }
   }
 
-  // Comissão ML
+  // Comissão ML - Order: 80
   if (productData && typeof productData.commission === 'number') {
-    indicatorRows.push(renderRow('Comissão ML', `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[OBSERVADO]', 'green'));
+    indicatorRows.push(createRow('commission', 80, 'Comissão ML', `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[OBSERVADO]', 'green'));
   }
 
-  // Recebe (Líquido)
+  // Recebe - Order: 90
   let recNetVal = null;
   if (priceNum !== null && productData && typeof productData.commission === 'number') {
     const taxVal = (priceNum * taxRate) / 100;
@@ -644,23 +692,25 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     });
     if (recCalc.value !== null) {
       recNetVal = recCalc.value;
-      indicatorRows.push(renderRow('Recebe', `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Valor líquido estimado a receber por unidade (preço - comissão ML - imposto estimado).'));
+      indicatorRows.push(createRow('receive_net', 90, 'Recebe', `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Valor líquido estimado a receber por unidade (preço - comissão ML - imposto estimado).'));
     }
   }
 
-  // Lucro e Margem (quando custo do fornecedor e valor a receber estiverem disponíveis)
+  // Lucro - Order: 100, Margem - Order: 110
   if (typeof supplierCost === 'number' && supplierCost >= 0 && recNetVal !== null && priceNum !== null) {
     const profitVal = recNetVal - supplierCost;
-    indicatorRows.push(renderRow('Lucro', `<strong style="color: ${profitVal >= 0 ? '#059669' : '#dc2626'};">R$ ${profitVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Lucro líquido unitário estimado (valor a receber - custo do fornecedor).'));
+    indicatorRows.push(createRow('profit', 100, 'Lucro', `<strong style="color: ${profitVal >= 0 ? '#059669' : '#dc2626'};">R$ ${profitVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Lucro líquido unitário estimado (valor a receber - custo do fornecedor).'));
 
     const marginCalc = calculateNetMargin(recNetVal, supplierCost, priceNum);
     if (marginCalc.value !== null) {
-      indicatorRows.push(renderRow('Margem', `<strong style="color: ${marginCalc.value >= 0 ? '#059669' : '#dc2626'};">${marginCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Margem de lucro líquida percentual estimada (lucro / preço unitário × 100).'));
+      indicatorRows.push(createRow('margin', 110, 'Margem', `<strong style="color: ${marginCalc.value >= 0 ? '#059669' : '#dc2626'};">${marginCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Margem de lucro líquida percentual estimada (lucro / preço unitário × 100).'));
     }
   }
 
+  const indicatorsRowsHtml = sortAndRenderRows(indicatorRows);
+
   let indicatorsHtml = '';
-  if (indicatorRows.length > 0) {
+  if (indicatorsRowsHtml) {
     indicatorsHtml = `
       <div style="background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -670,7 +720,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
           </div>
         </div>
         <div id="productradar-section-product-indicators">
-          ${indicatorRows.join('')}
+          ${indicatorsRowsHtml}
         </div>
       </div>
     `;
