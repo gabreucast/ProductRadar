@@ -214,6 +214,8 @@ function extractStructuredPageData(root) {
     returnAvailable: null,
     creationDate: null,
     installmentInfo: null,
+    brand: null,
+    category: null,
   };
 
   if (!root || typeof root.querySelectorAll !== 'function') return result;
@@ -237,7 +239,13 @@ function extractStructuredPageData(root) {
               }
               if (item.brand) {
                 const bName = typeof item.brand === 'string' ? item.brand : (item.brand.name || null);
-                if (bName && !result.sellerName) result.sellerName = bName;
+                if (bName) {
+                  result.brand = bName;
+                  if (!result.sellerName) result.sellerName = bName;
+                }
+              }
+              if (item.category && !result.category) {
+                result.category = typeof item.category === 'string' ? item.category : null;
               }
               if (item.offers) {
                 const offer = Array.isArray(item.offers) ? item.offers[0] : item.offers;
@@ -671,12 +679,35 @@ export function extractProductPageData(documentRoot) {
     creationDate = parseCreationDateText(structured.creationDate) || structured.creationDate;
   }
 
+  // 11. Marca e Categoria (DOM fallbacks)
+  let brand = structured.brand || null;
+  if (!brand && typeof documentRoot.querySelector === 'function') {
+    const brandEl = documentRoot.querySelector('.ui-pdp-features__part, [class*="brand-name" i]');
+    if (brandEl) {
+      const txt = (brandEl.textContent || '').trim();
+      if (txt && txt.length <= 40) brand = txt;
+    }
+  }
+
+  let category = structured.category || null;
+  if (!category && typeof documentRoot.querySelectorAll === 'function') {
+    const breadcrumbEls = documentRoot.querySelectorAll('.ui-pdp-breadcrumb__link, .andes-breadcrumb__link');
+    if (breadcrumbEls && breadcrumbEls.length > 0) {
+      const catArray = Array.from(breadcrumbEls).map((el) => (el.textContent || '').trim()).filter(Boolean);
+      if (catArray.length > 0) {
+        category = catArray.join(' > ');
+      }
+    }
+  }
+
   return {
     id,
     type,
     isCatalog,
     url: cleanUrl,
     title,
+    brand,
+    category,
     price: {
       current: currentPrice,
       original: originalPrice,
