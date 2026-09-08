@@ -35,7 +35,6 @@ export const PRODUCT_PATTERNS = Object.freeze({
 export const STORAGE_KEYS = Object.freeze({
   CONFIG: 'product_radar_config',
   PRODUCT_CACHE: 'product_radar_cache', // Limite de esquema reservado para contexto de produtos
-  SUPPLIER_COSTS: 'product_radar_supplier_costs', // Custo do fornecedor por produto canônico (TASK-029)
 });
 
 // Versão do esquema de configuração para suportar migrações futuras com segurança

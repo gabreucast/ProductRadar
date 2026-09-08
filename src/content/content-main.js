@@ -15,7 +15,6 @@ import {
   calculateElapsedDays,
   calculateConversionRate,
   calculateReceiveNet,
-  calculateNetMargin,
   formatDateBR,
   extractCanonicalProductId,
   parseMonetaryInput,
@@ -25,8 +24,6 @@ import { extractProductPageData } from './extractors/product-extractor.js';
 import {
   saveMultipleProductSearchContexts,
   getProductSearchContext,
-  saveProductSupplierCost,
-  getProductSupplierCost,
   getConfig,
 } from '../shared/storage.js';
 import {
@@ -296,7 +293,7 @@ function renderInfoIcon(text) {
  * @param {object} params.config - Configuração ativa do ProductRadar.
  * @returns {HTMLElement|null} Elemento do overlay de produto renderizado.
  */
-export function renderProductOverlay(documentRoot, { productData = null, searchContext = null, config = DEFAULT_CONFIG, supplierCost = null }) {
+export function renderProductOverlay(documentRoot, { productData = null, searchContext = null, config = DEFAULT_CONFIG }) {
   if (!documentRoot) return null;
 
   const doc = documentRoot.ownerDocument || (documentRoot.nodeType === 9 ? documentRoot : document);
@@ -538,49 +535,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     `;
   }
 
-  // 4. Custo do Fornecedor (Entrada manual do Usuário)
-  const canonicalId = (productData && productData.id) || null;
-  const initialCostValue = (typeof supplierCost === 'number' && supplierCost >= 0)
-    ? supplierCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    : '';
-
-  let supplierCostHtml = '';
-  if (canonicalId) {
-    supplierCostHtml = `
-      <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <button class="productradar-section-toggle-btn" data-target="productradar-section-supplier-cost" style="background: none; border: 1px solid #fcd34d; border-radius: 4px; color: #92400e; cursor: pointer; font-size: 12px; font-weight: 700; width: 18px; height: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; padding: 0;" title="Minimizar/Expandir">−</button>
-            <span style="font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase;">Custo do Fornecedor</span>
-            ${renderInfoIcon('Valor informado manualmente pelo usuário para cálculo de rentabilidade. Não é extraído do Mercado Livre.')}
-          </div>
-          <span style="font-size: 10px; background: #fef3c7; color: #b45309; padding: 1px 6px; border-radius: 4px; font-weight: 700;">[INFORMADO PELO USUÁRIO]</span>
-        </div>
-        <div id="productradar-section-supplier-cost">
-          <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
-            <span style="font-size: 11px; color: #4b5563; font-weight: 600;">R$</span>
-            <input
-              id="productradar-supplier-cost-input"
-              type="text"
-              value="${initialCostValue}"
-              placeholder="0,00"
-              data-product-id="${canonicalId}"
-              style="flex: 1; padding: 4px 8px; font-size: 12px; border: 1px solid #d1d5db; border-radius: 4px; outline: none; background: #ffffff;"
-            />
-            <button
-              id="productradar-supplier-cost-save-btn"
-              style="background: #d97706; color: #ffffff; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; cursor: pointer;"
-            >
-              Salvar
-            </button>
-          </div>
-          <div id="productradar-supplier-cost-feedback" style="font-size: 10px; min-height: 14px; margin-top: 2px;"></div>
-        </div>
-      </div>
-    `;
-  }
-
-  // 5. Contexto Herdado da Busca Anterior
+  // 4. Contexto Herdado da Busca Anterior
   let searchContextHtml = '';
   if (searchContext) {
     const sRows = [];
@@ -618,7 +573,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     }
   }
 
-  // 6. Indicadores & Métricas Calculadas (Inteligência do Produto)
+  // 5. Indicadores & Métricas Calculadas (Inteligência do Produto)
   const indicatorRows = [];
   const priceNum = productData && productData.price && typeof productData.price.current === 'number' ? productData.price.current : null;
   const soldNum = productData && typeof productData.soldQuantity === 'number' ? productData.soldQuantity : null;
@@ -681,7 +636,6 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   }
 
   // Recebe - Order: 90
-  let recNetVal = null;
   if (priceNum !== null && productData && typeof productData.commission === 'number') {
     const taxVal = (priceNum * taxRate) / 100;
     const recCalc = calculateReceiveNet({
@@ -691,19 +645,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       freight: 0,
     });
     if (recCalc.value !== null) {
-      recNetVal = recCalc.value;
       indicatorRows.push(createRow('receive_net', 90, 'Recebe', `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Valor líquido estimado a receber por unidade (preço - comissão ML - imposto estimado).'));
-    }
-  }
-
-  // Lucro - Order: 100, Margem - Order: 110
-  if (typeof supplierCost === 'number' && supplierCost >= 0 && recNetVal !== null && priceNum !== null) {
-    const profitVal = recNetVal - supplierCost;
-    indicatorRows.push(createRow('profit', 100, 'Lucro', `<strong style="color: ${profitVal >= 0 ? '#059669' : '#dc2626'};">R$ ${profitVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Lucro líquido unitário estimado (valor a receber - custo do fornecedor).'));
-
-    const marginCalc = calculateNetMargin(recNetVal, supplierCost, priceNum);
-    if (marginCalc.value !== null) {
-      indicatorRows.push(createRow('margin', 110, 'Margem', `<strong style="color: ${marginCalc.value >= 0 ? '#059669' : '#dc2626'};">${marginCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Margem de lucro líquida percentual estimada (lucro / preço unitário × 100).'));
     }
   }
 
@@ -761,7 +703,6 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         ${sellerDetailsHtml}
         ${ratingDetailsHtml}
         ${searchContextHtml}
-        ${supplierCostHtml}
         ${indicatorsHtml}
       </div>
 
@@ -881,48 +822,6 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
 
     overlayEl.addEventListener('mouseleave', hideTooltip);
     doc.addEventListener('click', hideTooltip);
-  }
-
-  // Salvar Custo do Fornecedor (TASK-029)
-  const costInput = overlayEl.querySelector('#productradar-supplier-cost-input');
-  const costSaveBtn = overlayEl.querySelector('#productradar-supplier-cost-save-btn');
-  const costFeedback = overlayEl.querySelector('#productradar-supplier-cost-feedback');
-
-  if (costInput && costSaveBtn && canonicalId) {
-    const handleSave = async () => {
-      const rawVal = costInput.value;
-      const parsed = parseMonetaryInput(rawVal);
-      if (parsed === null) {
-        if (costFeedback) {
-          costFeedback.innerHTML = `<span style="color: #dc2626; font-weight: 600;">Valor inválido. Digite um valor numérico positivo.</span>`;
-        }
-        return;
-      }
-      try {
-        await saveProductSupplierCost(canonicalId, parsed);
-        costInput.value = parsed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        if (costFeedback) {
-          costFeedback.innerHTML = `<span style="color: #16a34a; font-weight: 600;">✓ Custo salvo com sucesso!</span>`;
-          setTimeout(() => {
-            if (costFeedback && costFeedback.innerHTML.includes('Custo salvo')) {
-              costFeedback.innerHTML = '';
-            }
-          }, 3000);
-        }
-      } catch (err) {
-        if (costFeedback) {
-          costFeedback.innerHTML = `<span style="color: #dc2626; font-weight: 600;">Erro ao salvar custo.</span>`;
-        }
-      }
-    };
-
-    costSaveBtn.onclick = handleSave;
-    costInput.onkeydown = (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleSave();
-      }
-    };
   }
 
   return overlayEl;
@@ -1093,9 +992,8 @@ export async function runProductOrchestration(
     };
   }
 
-  // 3. Recuperação do contexto de busca e custo de fornecedor para o ID canônico (TASK-008 / TASK-021 / TASK-029)
+  // 3. Recuperação do contexto de busca para o ID canônico (TASK-008 / TASK-021)
   let searchContext = null;
-  let supplierCost = null;
   const targetId = (productData && productData.id) || (currentUrl ? extractCanonicalProductId(currentUrl) : null);
   if (targetId) {
     try {
@@ -1103,12 +1001,6 @@ export async function runProductOrchestration(
     } catch (err) {
       console.warn('[ProductRadar] Erro ao recuperar contexto de busca para produto:', err);
       searchContext = null;
-    }
-    try {
-      supplierCost = await getProductSupplierCost(targetId);
-    } catch (err) {
-      console.warn('[ProductRadar] Erro ao recuperar custo do fornecedor:', err);
-      supplierCost = null;
     }
   }
 
@@ -1120,19 +1012,18 @@ export async function runProductOrchestration(
     config = DEFAULT_CONFIG;
   }
 
-  // 5. Renderização do Overlay de Produto (TASK-016 / TASK-029)
+  // 5. Renderização do Overlay de Produto (TASK-016)
   try {
-    renderProductOverlay(documentRoot, { productData, searchContext, config, supplierCost });
+    renderProductOverlay(documentRoot, { productData, searchContext, config });
   } catch (err) {
     console.warn('[ProductRadar] Erro ao renderizar overlay de produto:', err);
   }
 
-  // 6. Retorno estruturado com separação explícita entre productData, searchContext e supplierCost
+  // 6. Retorno estruturado com separação explícita entre productData e searchContext
   return {
     context,
     productData,
     searchContext,
-    supplierCost,
     status: 'SUCCESS',
   };
 }
