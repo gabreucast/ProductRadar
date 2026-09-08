@@ -15,6 +15,7 @@ import {
   calculateElapsedDays,
   calculateConversionRate,
   calculateReceiveNet,
+  calculateNetMargin,
   formatDateBR,
   extractCanonicalProductId,
   parseMonetaryInput,
@@ -281,7 +282,7 @@ export function renderSearchOverlay(documentRoot, { extractedCards = [], resultC
 function renderInfoIcon(text) {
   if (!text) return '';
   const escapedText = String(text).replace(/"/g, '&quot;');
-  return `<span class="productradar-info-icon" data-tooltip="${escapedText}" title="${escapedText}" style="cursor: help; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; user-select: none;">ℹ️</span>`;
+  return `<span class="productradar-info-icon" tabindex="0" role="button" aria-label="Informações" data-tooltip="${escapedText}" title="${escapedText}" style="cursor: help; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; user-select: none;">ℹ️</span>`;
 }
 
 /**
@@ -426,12 +427,12 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     if (productData.seller.name) {
       sellerRows.push(renderRow('Vendedor', `<strong style="color: #111827;">${productData.seller.name}</strong>`, '[OBSERVADO]', 'purple'));
     }
-    if (productData.seller.sales) {
-      sellerRows.push(renderRow('Vendas do vendedor', `<strong style="color: #111827;">${productData.seller.sales}</strong>`, '[OBSERVADO]', 'purple'));
-    }
     if (productData.seller.reputation || productData.seller.powerSellerStatus) {
       const repText = productData.seller.reputation || (productData.seller.powerSellerStatus === 'platinum' ? 'MercadoLíder Platinum' : productData.seller.powerSellerStatus);
       sellerRows.push(renderRow('Reputação do vendedor', `<strong style="color: #111827;">${repText}</strong>`, '[OBSERVADO]', 'purple'));
+    }
+    if (productData.seller.sales) {
+      sellerRows.push(renderRow('Vendas do vendedor', `<strong style="color: #111827;">${productData.seller.sales}</strong>`, '[OBSERVADO]', 'purple'));
     }
     if (productData.seller.location) {
       sellerRows.push(renderRow('Localização do vendedor', `<strong style="color: #111827;">${productData.seller.location}</strong>`, '[OBSERVADO]', 'purple'));
@@ -599,8 +600,8 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       const monthlyVelocity = calculateMonthlyVelocity(spdCalc.value);
       if (monthlyVelocity.value !== null) {
         const roundedMonthly = Math.round(monthlyVelocity.value).toLocaleString('pt-BR');
-        indicatorRows.push(renderRow('Vendas mensais', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue'));
-        indicatorRows.push(renderRow('Ritmo atual (vendas/mês)', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue'));
+        indicatorRows.push(renderRow('Vendas mensais', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Estimativa de vendas acumuladas em 30 dias (vendas por dia × 30).'));
+        indicatorRows.push(renderRow('Ritmo atual (vendas/mês)', `<strong style="color: #111827;">~${roundedMonthly} / mês</strong>`, '[ESTIMADO / CALCULADO]', 'blue', 'Projeção do ritmo de vendas em 30 dias com base no histórico decorrido.'));
       }
     }
   }
@@ -614,7 +615,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   if (soldNum !== null && productData && typeof productData.visits === 'number' && productData.visits > 0) {
     const convCalc = calculateConversionRate(soldNum, productData.visits);
     if (convCalc.value !== null) {
-      indicatorRows.push(renderRow('Conversão', `<strong style="color: #111827;">${convCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue'));
+      indicatorRows.push(renderRow('Conversão', `<strong style="color: #111827;">${convCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Taxa estimada de conversão de visitantes em compradores (vendas / visitas × 100).'));
     }
   }
 
@@ -632,6 +633,7 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
   }
 
   // Recebe (Líquido)
+  let recNetVal = null;
   if (priceNum !== null && productData && typeof productData.commission === 'number') {
     const taxVal = (priceNum * taxRate) / 100;
     const recCalc = calculateReceiveNet({
@@ -641,7 +643,19 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
       freight: 0,
     });
     if (recCalc.value !== null) {
-      indicatorRows.push(renderRow('Recebe', `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue'));
+      recNetVal = recCalc.value;
+      indicatorRows.push(renderRow('Recebe', `<strong style="color: #111827;">R$ ${recCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Valor líquido estimado a receber por unidade (preço - comissão ML - imposto estimado).'));
+    }
+  }
+
+  // Lucro e Margem (quando custo do fornecedor e valor a receber estiverem disponíveis)
+  if (typeof supplierCost === 'number' && supplierCost >= 0 && recNetVal !== null && priceNum !== null) {
+    const profitVal = recNetVal - supplierCost;
+    indicatorRows.push(renderRow('Lucro', `<strong style="color: ${profitVal >= 0 ? '#059669' : '#dc2626'};">R$ ${profitVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[CALCULADO]', 'blue', 'Lucro líquido unitário estimado (valor a receber - custo do fornecedor).'));
+
+    const marginCalc = calculateNetMargin(recNetVal, supplierCost, priceNum);
+    if (marginCalc.value !== null) {
+      indicatorRows.push(renderRow('Margem', `<strong style="color: ${marginCalc.value >= 0 ? '#059669' : '#dc2626'};">${marginCalc.value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%</strong>`, '[CALCULADO]', 'blue', 'Margem de lucro líquida percentual estimada (lucro / preço unitário × 100).'));
     }
   }
 
@@ -696,8 +710,8 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
         ${pdpDetailsHtml}
         ${sellerDetailsHtml}
         ${ratingDetailsHtml}
-        ${supplierCostHtml}
         ${searchContextHtml}
+        ${supplierCostHtml}
         ${indicatorsHtml}
       </div>
 
@@ -792,12 +806,25 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     infoIcons.forEach((icon) => {
       icon.onmouseenter = () => showTooltipForIcon(icon);
       icon.onmouseleave = hideTooltip;
+      icon.onfocus = () => showTooltipForIcon(icon);
+      icon.onblur = hideTooltip;
       icon.onclick = (e) => {
         e.stopPropagation();
         if (tooltipEl.style.display === 'block') {
           hideTooltip();
         } else {
           showTooltipForIcon(icon);
+        }
+      };
+      icon.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (tooltipEl.style.display === 'block') {
+            hideTooltip();
+          } else {
+            showTooltipForIcon(icon);
+          }
         }
       };
     });
