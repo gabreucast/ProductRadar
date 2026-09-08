@@ -216,6 +216,9 @@ function extractStructuredPageData(root) {
     installmentInfo: null,
     brand: null,
     category: null,
+    listingType: null,
+    commission: null,
+    fixedFee: null,
   };
 
   if (!root || typeof root.querySelectorAll !== 'function') return result;
@@ -327,10 +330,19 @@ function extractStructuredPageData(root) {
               if (ev.installment_info && !result.installmentInfo) {
                 result.installmentInfo = String(ev.installment_info);
               }
+              if ((ev.listing_type_id || ev.listing_type) && !result.listingType) {
+                result.listingType = String(ev.listing_type_id || ev.listing_type);
+              }
             }
           } catch {
             // Ignora
           }
+        }
+      }
+      if (!result.listingType) {
+        const ltMatch = txt.match(/["']?(?:listing_type_id|listing_type|listingType)["']?\s*:\s*["']?([a-zA-Z0-9_]+)["']?/i);
+        if (ltMatch) {
+          result.listingType = ltMatch[1];
         }
       }
       if (!result.creationDate) {
@@ -345,6 +357,15 @@ function extractStructuredPageData(root) {
           const sVal = parseInt(soldMatch[1], 10);
           if (!isNaN(sVal) && sVal >= 0) {
             result.soldQuantity = sVal;
+          }
+        }
+      }
+      if (result.commission === null) {
+        const commMatch = txt.match(/["']?(?:commission_amount|commission|sale_fee|selling_fee)["']?\s*:\s*(\d+(?:\.\d+)?)/i);
+        if (commMatch) {
+          const val = parseFloat(commMatch[1]);
+          if (!isNaN(val) && val >= 0) {
+            result.commission = val;
           }
         }
       }
@@ -649,6 +670,12 @@ export function extractProductPageData(documentRoot) {
   if (commissionEl) {
     commission = parseMonetaryValue(commissionEl);
   }
+  if (commission === null && typeof structured.commission === 'number') {
+    commission = structured.commission;
+  }
+
+  let listingType = structured.listingType || null;
+  let fixedFee = structured.fixedFee || null;
 
   // 10. Data de Criação do Anúncio (TASK-028 / TASK-032)
   let creationDate = null;
@@ -704,6 +731,7 @@ export function extractProductPageData(documentRoot) {
     id,
     type,
     isCatalog,
+    listingType,
     url: cleanUrl,
     title,
     brand,
@@ -719,6 +747,7 @@ export function extractProductPageData(documentRoot) {
     creationDate,
     visits,
     commission,
+    fixedFee,
     seller: {
       name: sellerName,
       sales: sellerSales,

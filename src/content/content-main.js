@@ -18,6 +18,8 @@ import {
   formatDateBR,
   extractCanonicalProductId,
   parseMonetaryInput,
+  formatListingType,
+  calculateSellingCosts,
 } from '../shared/utils.js';
 import { extractSearchPageData } from './extractors/search-extractor.js';
 import { extractProductPageData } from './extractors/product-extractor.js';
@@ -380,6 +382,13 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
     pdpRows.push(createRow('catalog', 30, 'Catálogo', `<strong style="color: #111827;">${catText}</strong>`, '[OBSERVADO]', 'green'));
   }
 
+  if (productData && productData.listingType) {
+    const formattedListing = formatListingType(productData.listingType);
+    if (formattedListing) {
+      pdpRows.push(createRow('listing_type', 35, 'Tipo de anúncio', `<strong style="color: #111827;">${formattedListing}</strong>`, '[OBSERVADO]', 'green'));
+    }
+  }
+
   if (productData && typeof productData.availableStock === 'number') {
     pdpRows.push(createRow('stock', 40, 'Estoque', `<strong style="color: #111827;">${productData.availableStock} unidades</strong>`, '[OBSERVADO]', 'green'));
   }
@@ -398,6 +407,39 @@ export function renderProductOverlay(documentRoot, { productData = null, searchC
 
   if (productData && productData.installmentInfo) {
     pdpRows.push(createRow('installments', 80, 'Parcelamento', `<strong style="color: #111827;">${productData.installmentInfo}</strong>`, '[OBSERVADO]', 'green'));
+  }
+
+  if (productData && typeof productData.commission === 'number') {
+    pdpRows.push(createRow('commission', 85, 'Comissão ML', `<strong style="color: #111827;">R$ ${productData.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`, '[OBSERVADO]', 'green'));
+  }
+
+  const pNum = productData && productData.price && typeof productData.price.current === 'number' ? productData.price.current : null;
+  const commNum = productData && typeof productData.commission === 'number' ? productData.commission : null;
+  const fixFeeNum = productData && typeof productData.fixedFee === 'number' ? productData.fixedFee : 0;
+
+  if (pNum !== null) {
+    const costCalc = calculateSellingCosts({ price: pNum, commission: commNum, fixedFee: fixFeeNum });
+    if (costCalc.sellingCost.value !== null) {
+      pdpRows.push(createRow(
+        'selling_cost_total',
+        87,
+        'Custo de venda ML',
+        `<strong style="color: #111827;">R$ ${costCalc.sellingCost.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>`,
+        '[ESTIMADO / CALCULADO]',
+        'blue',
+        'Custo total de venda estimado (comissão ML + tarifas de publicação observadas na página).'
+      ));
+    } else {
+      pdpRows.push(createRow(
+        'selling_cost_total',
+        87,
+        'Custo de venda ML',
+        `<strong style="color: #6b7280;">Não calculated</strong>`.replace('calculated', 'calculado'),
+        '[CALCULADO]',
+        'amber',
+        'Não foi possível calcular o custo total de venda porque os componentes de tarifa/comissão não foram expostos no estado público desta página.'
+      ));
+    }
   }
 
   const creationDate = productData && productData.creationDate ? productData.creationDate : null;

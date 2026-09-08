@@ -12,6 +12,7 @@ import {
   DATA_SOURCES,
   DATA_SOURCE_LABELS,
   TRAFFIC_LIGHT_STATUS,
+  ML_LISTING_TYPES,
 } from './constants.js';
 
 /**
@@ -827,4 +828,66 @@ export function formatDateBR(dateInput) {
   const month = String(d.getUTCMonth() + 1).padStart(2, '0');
   const year = d.getUTCFullYear();
   return `${day}/${month}/${year}`;
+}
+
+/**
+ * Normaliza o tipo de anúncio do Mercado Livre para um rótulo legível em português (TASK-043).
+ *
+ * @param {string|null|undefined} rawType - Identificador bruto do tipo de anúncio (ex: "gold_special", "gold_pro", "free").
+ * @returns {string|null} Rótulo formatado em português ou null se não reconhecido.
+ */
+export function formatListingType(rawType) {
+  if (!rawType || typeof rawType !== 'string') return null;
+  const key = rawType.trim().toLowerCase();
+  if (ML_LISTING_TYPES[key]) {
+    return ML_LISTING_TYPES[key];
+  }
+  if (key.includes('special') || key.includes('classico') || key.includes('clássico')) {
+    return 'Clássico';
+  }
+  if (key.includes('pro') || key.includes('premium')) {
+    return 'Premium';
+  }
+  if (key.includes('free') || key.includes('gratis') || key.includes('grátis')) {
+    return 'Grátis';
+  }
+  return rawType;
+}
+
+/**
+ * Calcula o custo total de venda do Mercado Livre e o valor líquido a receber (TASK-043).
+ * Retorna { value, source } com o valor calculado se os dados de entrada forem suficientes,
+ * ou { value: null, source: DATA_SOURCES.UNAVAILABLE } caso contrário.
+ *
+ * @param {object} params
+ * @param {number|null} params.price - Preço de venda do produto.
+ * @param {number|null} params.commission - Valor em R$ da comissão observada (se disponível).
+ * @param {number|null} [params.fixedFee=0] - Tarifa fixa observada (se disponível).
+ * @returns {{ sellingCost: { value: number|null, source: string }, netAmount: { value: number|null, source: string } }}
+ */
+export function calculateSellingCosts({ price, commission, fixedFee = 0 }) {
+  if (
+    typeof price !== 'number' || isNaN(price) || price <= 0 ||
+    typeof commission !== 'number' || isNaN(commission) || commission < 0
+  ) {
+    return {
+      sellingCost: { value: null, source: DATA_SOURCES.UNAVAILABLE },
+      netAmount: { value: null, source: DATA_SOURCES.UNAVAILABLE },
+    };
+  }
+
+  const fee = typeof fixedFee === 'number' && !isNaN(fixedFee) && fixedFee >= 0 ? fixedFee : 0;
+  const totalCost = commission + fee;
+  const net = price - totalCost;
+
+  return {
+    sellingCost: {
+      value: totalCost,
+      source: DATA_SOURCES.CALCULATED,
+    },
+    netAmount: {
+      value: Math.max(0, net),
+      source: DATA_SOURCES.CALCULATED,
+    },
+  };
 }

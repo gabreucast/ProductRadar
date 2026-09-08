@@ -17,6 +17,14 @@ export const PRODUCT_ID_TYPES = Object.freeze({
   CATALOG: 'CATALOG',   // Produto de catálogo unificado (/p/MLB...)
 });
 
+// Mapeamento de Tipos de Anúncio do Mercado Livre Brasil (TASK-043)
+export const ML_LISTING_TYPES = Object.freeze({
+  gold_special: 'Clássico',
+  gold_pro: 'Premium',
+  gold_free: 'Grátis',
+  free: 'Grátis',
+});
+
 // Expressões Regulares para Reconhecimento e Normalização de Identificadores
 export const PRODUCT_PATTERNS = Object.freeze({
   // Identificador canônico limpo: MLB seguido de 6 a 14 dígitos numéricos
