@@ -123,17 +123,23 @@ export const SELECTORS = Object.freeze({
       '.ui-pdp-container',
       '.ui-pdp',
       '.ui-vip-core-container',
+      '.ui-vpp-container',
     ]),
     HEADER: Object.freeze([
       '.ui-pdp-header',
+      '.ui-vpp-header',
     ]),
     TITLE: Object.freeze([
       'h1.ui-pdp-title',
       '.ui-pdp-title',
+      'h1.ui-vpp-highlighted-specs__title',
+      '.ui-vpp-highlighted-specs__title',
     ]),
     SUBTITLE_SALES: Object.freeze([
       '.ui-pdp-subtitle',
       '.ui-pdp-header__subtitle',
+      '.ui-vpp-header__subtitle',
+      '[class*="header__subtitle" i]',
     ]),
 
     // Preço e descontos do produto

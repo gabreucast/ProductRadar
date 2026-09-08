@@ -166,10 +166,17 @@ export function parseCreationDateText(text, now = new Date()) {
     }
   }
 
-  // 3. Padrão ISO ou data padrão (ex: "2025-05-14" ou "2025-05-14T10:00:00Z")
-  const isoMatch = clean.match(/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?$/);
-  if (isoMatch) {
-    const d = new Date(clean);
+  // 3. Padrão ISO ou data legível via Date.parse (ex: "2025-05-14", "2025-05-14T13:34:35.445Z", "2025-05-14T13:34:35-03:00")
+  const parsedTs = Date.parse(clean);
+  if (!isNaN(parsedTs)) {
+    return new Date(parsedTs).toISOString();
+  }
+
+  // 4. Timestamp numérico em milissegundos ou segundos
+  if (/^\d{10,13}$/.test(clean)) {
+    let ts = parseInt(clean, 10);
+    if (clean.length === 10) ts *= 1000;
+    const d = new Date(ts);
     if (!isNaN(d.getTime())) {
       return d.toISOString();
     }
@@ -179,7 +186,7 @@ export function parseCreationDateText(text, now = new Date()) {
 }
 
 /**
- * Extrai dados estruturados incorporados na página de produto (application/ld+json, melidata event_data, etc.) (TASK-032).
+ * Extrai dados estruturados incorporados na página de produto (application/ld+json, melidata event_data, etc.) (TASK-032 / TASK-037).
  * Serve como camada complementar de extração para obter dados legítimos do Mercado Livre quando seletores visuais não os encontram.
  *
  * @param {Document|Element} root - Raiz do documento ou contêiner.
@@ -253,6 +260,9 @@ function extractStructuredPageData(root) {
                   result.reviewsCount = cnt;
                 }
               }
+              if ((item.dateCreated || item.releaseDate) && !result.creationDate) {
+                result.creationDate = String(item.dateCreated || item.releaseDate);
+              }
             }
           }
         }
@@ -316,9 +326,18 @@ function extractStructuredPageData(root) {
         }
       }
       if (!result.creationDate) {
-        const startTimeMatch = txt.match(/["']?(?:startTime|date_created)["']?\s*:\s*["']([^"'\s]+)["']/);
+        const startTimeMatch = txt.match(/["']?(?:startTime|date_created|created_at|dateCreated|creation_date)["']?\s*:\s*["']?([^"'\s,}]+)["']?/i);
         if (startTimeMatch) {
           result.creationDate = startTimeMatch[1];
+        }
+      }
+      if (result.soldQuantity === null) {
+        const soldMatch = txt.match(/["']?(?:sold_quantity|soldQuantity|sold_units|total_sold)["']?\s*:\s*(\d+)/i);
+        if (soldMatch) {
+          const sVal = parseInt(soldMatch[1], 10);
+          if (!isNaN(sVal) && sVal >= 0) {
+            result.soldQuantity = sVal;
+          }
         }
       }
     }
